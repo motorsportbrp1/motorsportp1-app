@@ -273,10 +273,14 @@ export default function TeamProfilePage({ id }: TeamProfilePageProps) {
                 }
 
                 // ── Technical Evolution ──
+                const constructorIds = cData.id === 'rb' || cData.id === 'racing-bulls'
+                    ? ['rb', 'racing-bulls']
+                    : [cData.id];
+
                 const { data: techData } = await supabase
                     .from('vw_team_technical_evolution')
                     .select('*')
-                    .eq('constructor_id', cData.id)
+                    .in('constructor_id', constructorIds)
                     .order('year', { ascending: false });
 
                 const techEvolution = (techData || []).map((car: any) => ({

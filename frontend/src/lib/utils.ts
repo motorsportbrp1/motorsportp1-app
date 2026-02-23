@@ -208,9 +208,7 @@ export function getTeamLogoUrl(constructorId: string): string {
  */
 export function getCarImageUrl(constructorId: string, year: number | string): string {
     if (!constructorId) return "";
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
-    const normalizedId = constructorId.toLowerCase().replace(/_/g, '').replace(/ /g, '');
-    return `${supabaseUrl}/storage/v1/object/public/f1-media/cars/${normalizedId}/${year}.webp`;
+    return getMediaUrl('cars', constructorId, `${year}.webp`);
 }
 
 
@@ -219,7 +217,16 @@ export function getCarImageUrl(constructorId: string, year: number | string): st
  */
 export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks', id: string, filename: string): string {
     const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
-    // Convert underscores to dashes for cars and drivers, since media buckets are usually formatted with dashes
-    const normalizedId = (type === 'drivers' || type === 'cars') ? id.toLowerCase().replace(/_/g, '-') : id;
+
+    let normalizedId = id.toLowerCase();
+
+    if (type === 'drivers') {
+        normalizedId = normalizedId.replace(/_/g, '-');
+    } else if (type === 'cars') {
+        if (normalizedId === 'red_bull' || normalizedId === 'red-bull') normalizedId = 'redbull';
+        else if (normalizedId === 'rb' || normalizedId === 'racing_bulls' || normalizedId === 'racing-bulls') normalizedId = 'racingbulls';
+        // 'aston_martin' keeps the underscore
+    }
+
     return `${baseUrl}/storage/v1/object/public/f1-media/${type}/${normalizedId}/${filename}`;
 }
