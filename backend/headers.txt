@@ -1,0 +1,138 @@
+FILE: f1db-chassis.csv
+COLS: id, constructorId, name, fullName
+
+FILE: f1db-circuits.csv
+COLS: id, name, fullName, previousNames, type, direction, placeName, countryId, latitude, longitude, length, turns, totalRacesHeld
+
+FILE: f1db-constructors-chronology.csv
+COLS: parentConstructorId, positionDisplayOrder, constructorId, yearFrom, yearTo
+
+FILE: f1db-constructors.csv
+COLS: id, name, fullName, countryId, bestChampionshipPosition, bestStartingGridPosition, bestRaceResult, bestSprintRaceResult, totalChampionshipWins, totalRaceEntries, totalRaceStarts, totalRaceWins, total1And2Finishes, totalRaceLaps, totalPodiums, totalPodiumRaces, totalPoints, totalChampionshipPoints, totalPolePositions, totalFastestLaps, totalSprintRaceStarts, totalSprintRaceWins
+
+FILE: f1db-continents.csv
+COLS: id, code, name, demonym
+
+FILE: f1db-countries.csv
+COLS: id, alpha2Code, alpha3Code, iocCode, name, demonym, continentId
+
+FILE: f1db-drivers-family-relationships.csv
+COLS: parentDriverId, positionDisplayOrder, driverId, type
+
+FILE: f1db-drivers.csv
+COLS: id, name, firstName, lastName, fullName, abbreviation, permanentNumber, gender, dateOfBirth, dateOfDeath, placeOfBirth, countryOfBirthCountryId, nationalityCountryId, secondNationalityCountryId, bestChampionshipPosition, bestStartingGridPosition, bestRaceResult, bestSprintRaceResult, totalChampionshipWins, totalRaceEntries, totalRaceStarts, totalRaceWins, totalRaceLaps, totalPodiums, totalPoints, totalChampionshipPoints, totalPolePositions, totalFastestLaps, totalSprintRaceStarts, totalSprintRaceWins, totalDriverOfTheDay, totalGrandSlams
+
+FILE: f1db-engine-manufacturers.csv
+COLS: id, name, countryId, bestChampionshipPosition, bestStartingGridPosition, bestRaceResult, bestSprintRaceResult, totalChampionshipWins, totalRaceEntries, totalRaceStarts, totalRaceWins, totalRaceLaps, totalPodiums, totalPodiumRaces, totalPoints, totalChampionshipPoints, totalPolePositions, totalFastestLaps, totalSprintRaceStarts, totalSprintRaceWins
+
+FILE: f1db-engines.csv
+COLS: id, engineManufacturerId, name, fullName, capacity, configuration, aspiration
+
+FILE: f1db-entrants.csv
+COLS: id, name
+
+FILE: f1db-grands-prix.csv
+COLS: id, name, fullName, shortName, abbreviation, countryId, totalRacesHeld
+
+FILE: f1db-races-constructor-standings.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, constructorId, engineManufacturerId, points, positionsGained, championshipWon
+
+FILE: f1db-races-driver-of-the-day-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, percentage
+
+FILE: f1db-races-driver-standings.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverId, points, positionsGained, championshipWon
+
+FILE: f1db-races-fastest-laps.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, lap, time, timeMillis, gap, gapMillis, interval, intervalMillis
+
+FILE: f1db-races-free-practice-1-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-free-practice-2-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-free-practice-3-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-free-practice-4-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-pit-stops.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, stop, lap, time, timeMillis
+
+FILE: f1db-races-pre-qualifying-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, q1, q1Millis, q2, q2Millis, q3, q3Millis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-qualifying-1-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, q1, q1Millis, q2, q2Millis, q3, q3Millis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-qualifying-2-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, q1, q1Millis, q2, q2Millis, q3, q3Millis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-qualifying-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, q1, q1Millis, q2, q2Millis, q3, q3Millis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-race-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, sharedCar, laps, time, timeMillis, timePenalty, timePenaltyMillis, gap, gapMillis, gapLaps, interval, intervalMillis, reasonRetired, points, polePosition, qualificationPositionNumber, qualificationPositionText, gridPositionNumber, gridPositionText, positionsGained, pitStops, fastestLap, driverOfTheDay, grandSlam
+
+FILE: f1db-races-sprint-qualifying-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, q1, q1Millis, q2, q2Millis, q3, q3Millis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races-sprint-race-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, sharedCar, laps, time, timeMillis, timePenalty, timePenaltyMillis, gap, gapMillis, gapLaps, interval, intervalMillis, reasonRetired, points, polePosition, qualificationPositionNumber, qualificationPositionText, gridPositionNumber, gridPositionText, positionsGained, pitStops, fastestLap, driverOfTheDay, grandSlam
+
+FILE: f1db-races-sprint-starting-grid-positions.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, qualificationPositionNumber, qualificationPositionText, gridPenalty, gridPenaltyPositions, time, timeMillis
+
+FILE: f1db-races-starting-grid-positions.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, qualificationPositionNumber, qualificationPositionText, gridPenalty, gridPenaltyPositions, time, timeMillis
+
+FILE: f1db-races-warming-up-results.csv
+COLS: raceId, year, round, positionDisplayOrder, positionNumber, positionText, driverNumber, driverId, constructorId, engineManufacturerId, tyreManufacturerId, time, timeMillis, gap, gapMillis, interval, intervalMillis, laps
+
+FILE: f1db-races.csv
+COLS: id, year, round, date, time, grandPrixId, officialName, qualifyingFormat, sprintQualifyingFormat, circuitId, circuitType, direction, courseLength, turns, laps, distance, scheduledLaps, scheduledDistance, driversChampionshipDecider, constructorsChampionshipDecider, preQualifyingDate, preQualifyingTime, freePractice1Date, freePractice1Time, freePractice2Date, freePractice2Time, freePractice3Date, freePractice3Time, freePractice4Date, freePractice4Time, qualifying1Date, qualifying1Time, qualifying2Date, qualifying2Time, qualifyingDate, qualifyingTime, sprintQualifyingDate, sprintQualifyingTime, sprintRaceDate, sprintRaceTime, warmingUpDate, warmingUpTime
+
+FILE: f1db-seasons-constructor-standings.csv
+COLS: year, positionDisplayOrder, positionNumber, positionText, constructorId, engineManufacturerId, points, championshipWon
+
+FILE: f1db-seasons-constructors.csv
+COLS: year, constructorId, positionNumber, positionText, bestStartingGridPosition, bestRaceResult, bestSprintRaceResult, totalRaceEntries, totalRaceStarts, totalRaceWins, total1And2Finishes, totalRaceLaps, totalPodiums, totalPodiumRaces, totalPoints, totalPolePositions, totalFastestLaps, totalSprintRaceStarts, totalSprintRaceWins
+
+FILE: f1db-seasons-driver-standings.csv
+COLS: year, positionDisplayOrder, positionNumber, positionText, driverId, points, championshipWon
+
+FILE: f1db-seasons-drivers.csv
+COLS: year, driverId, positionNumber, positionText, bestStartingGridPosition, bestRaceResult, bestSprintRaceResult, totalRaceEntries, totalRaceStarts, totalRaceWins, totalRaceLaps, totalPodiums, totalPoints, totalPolePositions, totalFastestLaps, totalSprintRaceStarts, totalSprintRaceWins, totalDriverOfTheDay, totalGrandSlams
+
+FILE: f1db-seasons-engine-manufacturers.csv
+COLS: year, engineManufacturerId, positionNumber, positionText, bestStartingGridPosition, bestRaceResult, bestSprintRaceResult, totalRaceEntries, totalRaceStarts, totalRaceWins, totalRaceLaps, totalPodiums, totalPodiumRaces, totalPoints, totalPolePositions, totalFastestLaps, totalSprintRaceStarts, totalSprintRaceWins
+
+FILE: f1db-seasons-entrants-chassis.csv
+COLS: year, entrantId, constructorId, engineManufacturerId, chassisId
+
+FILE: f1db-seasons-entrants-constructors.csv
+COLS: year, entrantId, constructorId, engineManufacturerId
+
+FILE: f1db-seasons-entrants-drivers.csv
+COLS: year, entrantId, constructorId, engineManufacturerId, driverId, rounds, roundsText, testDriver
+
+FILE: f1db-seasons-entrants-engines.csv
+COLS: year, entrantId, constructorId, engineManufacturerId, engineId
+
+FILE: f1db-seasons-entrants-tyre-manufacturers.csv
+COLS: year, entrantId, constructorId, engineManufacturerId, tyreManufacturerId
+
+FILE: f1db-seasons-entrants.csv
+COLS: year, entrantId, countryId
+
+FILE: f1db-seasons-tyre-manufacturers.csv
+COLS: year, tyreManufacturerId, bestStartingGridPosition, bestRaceResult, bestSprintRaceResult, totalRaceEntries, totalRaceStarts, totalRaceWins, totalRaceLaps, totalPodiums, totalPodiumRaces, totalPolePositions, totalFastestLaps, totalSprintRaceStarts, totalSprintRaceWins
+
+FILE: f1db-seasons.csv
+COLS: year
+
+FILE: f1db-tyre-manufacturers.csv
+COLS: id, name, countryId, bestStartingGridPosition, bestRaceResult, bestSprintRaceResult, totalRaceEntries, totalRaceStarts, totalRaceWins, totalRaceLaps, totalPodiums, totalPodiumRaces, totalPolePositions, totalFastestLaps, totalSprintRaceStarts, totalSprintRaceWins
+

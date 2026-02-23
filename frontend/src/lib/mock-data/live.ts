@@ -1,0 +1,108 @@
+import { LiveTimingState, LiveDriver, RaceControlMessage } from "@/types";
+
+export const mockLiveDrivers: LiveDriver[] = [
+    {
+        driverNumber: "1", abbreviation: "VER", team: "Red Bull Racing", teamColor: "#3671C6",
+        position: 1, lastLapTime: "1:38.245", bestLapTime: "1:37.845",
+        sector1: { time: "27.123", status: "green" },
+        sector2: { time: "41.567", status: "purple" },
+        sector3: { time: "29.555", status: "yellow" },
+        gap: "LEADER", interval: "—", inPit: false, pitCount: 2, retired: false,
+        compound: "HARD", tyreAge: 12,
+    },
+    {
+        driverNumber: "4", abbreviation: "NOR", team: "McLaren", teamColor: "#FF8000",
+        position: 2, lastLapTime: "1:38.456", bestLapTime: "1:37.942",
+        sector1: { time: "27.345", status: "yellow" },
+        sector2: { time: "41.678", status: "green" },
+        sector3: { time: "29.433", status: "green" },
+        gap: "+3.245", interval: "+3.245", inPit: false, pitCount: 2, retired: false,
+        compound: "HARD", tyreAge: 12,
+    },
+    {
+        driverNumber: "16", abbreviation: "LEC", team: "Ferrari", teamColor: "#E8002D",
+        position: 3, lastLapTime: "1:38.678", bestLapTime: "1:38.101",
+        sector1: { time: "27.456", status: "yellow" },
+        sector2: { time: "41.789", status: "yellow" },
+        sector3: { time: "29.433", status: "green" },
+        gap: "+5.812", interval: "+2.567", inPit: false, pitCount: 2, retired: false,
+        compound: "MEDIUM", tyreAge: 8,
+    },
+    {
+        driverNumber: "11", abbreviation: "PER", team: "Red Bull Racing", teamColor: "#3671C6",
+        position: 4, lastLapTime: "1:38.890", bestLapTime: "1:38.256",
+        sector1: { time: "27.567", status: "yellow" },
+        sector2: { time: "41.890", status: "yellow" },
+        sector3: { time: "29.433", status: "yellow" },
+        gap: "+8.234", interval: "+2.422", inPit: false, pitCount: 2, retired: false,
+        compound: "HARD", tyreAge: 15,
+    },
+    {
+        driverNumber: "81", abbreviation: "PIA", team: "McLaren", teamColor: "#FF8000",
+        position: 5, lastLapTime: "1:38.923", bestLapTime: "1:38.312",
+        sector1: { time: "27.601", status: "yellow" },
+        sector2: null, sector3: null,
+        gap: "+10.567", interval: "+2.333", inPit: false, pitCount: 1, retired: false,
+        compound: "MEDIUM", tyreAge: 18,
+    },
+    {
+        driverNumber: "55", abbreviation: "SAI", team: "Ferrari", teamColor: "#E8002D",
+        position: 6, lastLapTime: "1:39.012", bestLapTime: "1:38.475",
+        sector1: null, sector2: null, sector3: null,
+        gap: "+12.890", interval: "+2.323", inPit: true, pitCount: 2, retired: false,
+        compound: "SOFT", tyreAge: 0,
+    },
+    {
+        driverNumber: "44", abbreviation: "HAM", team: "Mercedes", teamColor: "#27F4D2",
+        position: 7, lastLapTime: "1:39.156", bestLapTime: "1:38.598",
+        sector1: { time: "27.789", status: "yellow" },
+        sector2: { time: "42.123", status: "yellow" },
+        sector3: { time: "29.244", status: "purple" },
+        gap: "+15.234", interval: "+2.344", inPit: false, pitCount: 2, retired: false,
+        compound: "HARD", tyreAge: 10,
+    },
+    {
+        driverNumber: "63", abbreviation: "RUS", team: "Mercedes", teamColor: "#27F4D2",
+        position: 8, lastLapTime: "1:39.234", bestLapTime: "1:38.654",
+        sector1: { time: "27.890", status: "yellow" },
+        sector2: { time: "42.012", status: "green" },
+        sector3: null,
+        gap: "+16.567", interval: "+1.333", inPit: false, pitCount: 2, retired: false,
+        compound: "HARD", tyreAge: 10,
+    },
+    {
+        driverNumber: "14", abbreviation: "ALO", team: "Aston Martin", teamColor: "#229971",
+        position: 9, lastLapTime: "1:39.456", bestLapTime: "1:38.890",
+        sector1: { time: "28.012", status: "yellow" },
+        sector2: null, sector3: null,
+        gap: "+22.345", interval: "+5.778", inPit: false, pitCount: 2, retired: false,
+        compound: "HARD", tyreAge: 14,
+    },
+    {
+        driverNumber: "10", abbreviation: "GAS", team: "Alpine", teamColor: "#FF87BC",
+        position: 10, lastLapTime: "1:39.678", bestLapTime: "1:39.123",
+        sector1: null, sector2: null, sector3: null,
+        gap: "+25.678", interval: "+3.333", inPit: false, pitCount: 2, retired: false,
+        compound: "MEDIUM", tyreAge: 12,
+    },
+];
+
+export const mockRaceControlMessages: RaceControlMessage[] = [
+    { utc: "2024-04-21T08:45:12Z", category: "Flag", message: "GREEN FLAG - RACE RESUMED", flag: "GREEN" },
+    { utc: "2024-04-21T08:42:03Z", category: "Flag", message: "VIRTUAL SAFETY CAR DEPLOYED", flag: "VSC" },
+    { utc: "2024-04-21T08:40:55Z", category: "CarEvent", message: "DEBRIS ON TRACK - Turn 7", flag: "YELLOW" },
+    { utc: "2024-04-21T08:35:22Z", category: "Drs", message: "DRS ENABLED", flag: null },
+    { utc: "2024-04-21T08:30:00Z", category: "Flag", message: "GREEN FLAG - RACE START", flag: "GREEN" },
+    { utc: "2024-04-21T08:28:00Z", category: "Flag", message: "FORMATION LAP", flag: null },
+    { utc: "2024-04-21T08:25:00Z", category: "Other", message: "PIT LANE OPEN", flag: null },
+];
+
+export const mockLiveTimingState: LiveTimingState = {
+    sessionStatus: "Started",
+    trackStatus: "AllClear",
+    timestamp: "2024-04-21T08:45:30Z",
+    currentLap: 42,
+    totalLaps: 56,
+    drivers: mockLiveDrivers,
+    raceControlMessages: mockRaceControlMessages,
+};

@@ -1,0 +1,166 @@
+[
+    {
+        "csv": "f1db-chassis.csv",
+        "table": "chassis"
+    },
+    {
+        "csv": "f1db-constructors-chronology.csv",
+        "table": "constructors_chronology"
+    },
+    {
+        "csv": "f1db-continents.csv",
+        "table": "continents"
+    },
+    {
+        "csv": "f1db-countries.csv",
+        "table": "countries"
+    },
+    {
+        "csv": "f1db-drivers-family-relationships.csv",
+        "table": "drivers_family_relationships"
+    },
+    {
+        "csv": "f1db-engine-manufacturers.csv",
+        "table": "engine_manufacturers"
+    },
+    {
+        "csv": "f1db-engines.csv",
+        "table": "engines"
+    },
+    {
+        "csv": "f1db-entrants.csv",
+        "table": "entrants"
+    },
+    {
+        "csv": "f1db-grands-prix.csv",
+        "table": "grands_prix"
+    },
+    {
+        "csv": "f1db-races-constructor-standings.csv",
+        "table": "races_constructor_standings"
+    },
+    {
+        "csv": "f1db-races-driver-of-the-day-results.csv",
+        "table": "races_driver_of_the_day_results"
+    },
+    {
+        "csv": "f1db-races-driver-standings.csv",
+        "table": "races_driver_standings"
+    },
+    {
+        "csv": "f1db-races-fastest-laps.csv",
+        "table": "races_fastest_laps"
+    },
+    {
+        "csv": "f1db-races-free-practice-1-results.csv",
+        "table": "races_free_practice_1_results"
+    },
+    {
+        "csv": "f1db-races-free-practice-2-results.csv",
+        "table": "races_free_practice_2_results"
+    },
+    {
+        "csv": "f1db-races-free-practice-3-results.csv",
+        "table": "races_free_practice_3_results"
+    },
+    {
+        "csv": "f1db-races-free-practice-4-results.csv",
+        "table": "races_free_practice_4_results"
+    },
+    {
+        "csv": "f1db-races-pit-stops.csv",
+        "table": "races_pit_stops"
+    },
+    {
+        "csv": "f1db-races-pre-qualifying-results.csv",
+        "table": "races_pre_qualifying_results"
+    },
+    {
+        "csv": "f1db-races-qualifying-1-results.csv",
+        "table": "races_qualifying_1_results"
+    },
+    {
+        "csv": "f1db-races-qualifying-2-results.csv",
+        "table": "races_qualifying_2_results"
+    },
+    {
+        "csv": "f1db-races-qualifying-results.csv",
+        "table": "races_qualifying_results"
+    },
+    {
+        "csv": "f1db-races-race-results.csv",
+        "table": "races_race_results"
+    },
+    {
+        "csv": "f1db-races-sprint-qualifying-results.csv",
+        "table": "races_sprint_qualifying_results"
+    },
+    {
+        "csv": "f1db-races-sprint-race-results.csv",
+        "table": "races_sprint_race_results"
+    },
+    {
+        "csv": "f1db-races-sprint-starting-grid-positions.csv",
+        "table": "races_sprint_starting_grid_positions"
+    },
+    {
+        "csv": "f1db-races-starting-grid-positions.csv",
+        "table": "races_starting_grid_positions"
+    },
+    {
+        "csv": "f1db-races-warming-up-results.csv",
+        "table": "races_warming_up_results"
+    },
+    {
+        "csv": "f1db-seasons-constructor-standings.csv",
+        "table": "seasons_constructor_standings"
+    },
+    {
+        "csv": "f1db-seasons-constructors.csv",
+        "table": "seasons_constructors"
+    },
+    {
+        "csv": "f1db-seasons-driver-standings.csv",
+        "table": "seasons_driver_standings"
+    },
+    {
+        "csv": "f1db-seasons-drivers.csv",
+        "table": "seasons_drivers"
+    },
+    {
+        "csv": "f1db-seasons-engine-manufacturers.csv",
+        "table": "seasons_engine_manufacturers"
+    },
+    {
+        "csv": "f1db-seasons-entrants-chassis.csv",
+        "table": "seasons_entrants_chassis"
+    },
+    {
+        "csv": "f1db-seasons-entrants-constructors.csv",
+        "table": "seasons_entrants_constructors"
+    },
+    {
+        "csv": "f1db-seasons-entrants-drivers.csv",
+        "table": "seasons_entrants_drivers"
+    },
+    {
+        "csv": "f1db-seasons-entrants-engines.csv",
+        "table": "seasons_entrants_engines"
+    },
+    {
+        "csv": "f1db-seasons-entrants-tyre-manufacturers.csv",
+        "table": "seasons_entrants_tyre_manufacturers"
+    },
+    {
+        "csv": "f1db-seasons-entrants.csv",
+        "table": "seasons_entrants"
+    },
+    {
+        "csv": "f1db-seasons-tyre-manufacturers.csv",
+        "table": "seasons_tyre_manufacturers"
+    },
+    {
+        "csv": "f1db-tyre-manufacturers.csv",
+        "table": "tyre_manufacturers"
+    }
+]
