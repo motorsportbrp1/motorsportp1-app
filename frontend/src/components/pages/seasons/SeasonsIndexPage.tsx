@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getMediaUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
+import { getMediaUrl, getTeamLogoUrl, getDriverImageUrl, getSeasonCardImageUrl } from "@/lib/utils";
 
 // Era definitions
 const ERAS = [
@@ -330,13 +330,20 @@ export default function SeasonsIndexPage() {
                                     {/* Image area — gradient fallback with year */}
                                     <div className="h-48 w-full relative bg-gradient-to-b from-slate-800 to-surface-dark overflow-hidden">
 
-                                        {/* Background fallback (year text) */}
+                                        {/* Background fallback (year text/image) */}
                                         <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1541348263662-e068662d82af?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60')" }}></div>
-                                            <span className="text-7xl font-bold text-white/10 tracking-tighter">{season.year}</span>
+                                            {getSeasonCardImageUrl(season.year) ? (
+                                                <img
+                                                    src={getSeasonCardImageUrl(season.year)}
+                                                    alt={`F1 Season ${season.year}`}
+                                                    className="w-full h-full object-cover opacity-60 mix-blend-screen mix-blend-luminosity"
+                                                    onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }}
+                                                />
+                                            ) : (
+                                                <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1541348263662-e068662d82af?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60')" }}></div>
+                                            )}
+                                            <span className={`absolute text-7xl font-bold text-white/10 tracking-tighter ${getSeasonCardImageUrl(season.year) ? 'hidden' : ''}`}>{season.year}</span>
                                         </div>
-
-                                        {/* Actual Champion Image Background - Removed pending specific season images */}
 
                                         {/* Gradient overlay for text readability */}
                                         <div className="absolute inset-0 bg-gradient-to-t from-surface-dark via-transparent to-transparent z-10"></div>

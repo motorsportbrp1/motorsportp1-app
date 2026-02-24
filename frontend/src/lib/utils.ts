@@ -275,7 +275,11 @@ export function getDriverImageUrl(driverId: string, fallbackYear?: number): stri
  * Get Supabase Storage URL for dynamic media
  */
 export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'seasons-index-cards', id: string, filename: string): string {
-    const backendUrl = "http://localhost:8000"; // Local media server
+    const isProd = process.env.NODE_ENV === 'production';
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
+    const localBackendUrl = "http://localhost:8000";
+
+    const rootUrl = isProd ? `${supabaseUrl}/storage/v1/object/public/f1-media` : `${localBackendUrl}/media`;
 
     let normalizedId = id.toLowerCase();
 
@@ -286,5 +290,26 @@ export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'sea
         else if (normalizedId === 'rb' || normalizedId === 'racing_bulls' || normalizedId === 'racing-bulls') normalizedId = 'racingbulls';
     }
 
-    return `${backendUrl}/media/${type}/${normalizedId}/${filename}`;
+    return `${rootUrl}/${type}/${normalizedId}/${filename}`;
+}
+
+/**
+ * Get Season Card Background Image URL
+ */
+export function getSeasonCardImageUrl(year: number): string {
+    const KNOWN_CARDS: Record<number, string> = {
+        2024: "2024-season-verstappen.jpg",
+        2025: "2025-season-norris.jpg"
+    };
+
+    if (KNOWN_CARDS[year]) {
+        const isProd = process.env.NODE_ENV === 'production';
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
+        const localBackendUrl = "http://localhost:8000";
+
+        const rootUrl = isProd ? `${supabaseUrl}/storage/v1/object/public/f1-media` : `${localBackendUrl}/media`;
+        return `${rootUrl}/seasons-index-cards/${KNOWN_CARDS[year]}`;
+    }
+
+    return "";
 }

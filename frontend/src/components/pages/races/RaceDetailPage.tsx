@@ -541,7 +541,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                                                     }}
                                                                 />
                                                             </div>
-                                                            {d.driverName} {d.driverLastName}
+                                                            {d.driverName} {!d.driverName?.includes(d.driverLastName) && d.driverLastName ? ` ${d.driverLastName}` : ''}
                                                         </div>
                                                     </td>
                                                     <td className="py-3 text-slate-400 text-xs">
