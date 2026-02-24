@@ -298,6 +298,13 @@ export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'sea
  */
 export function getSeasonCardImageUrl(year: number): string {
     const KNOWN_CARDS: Record<number, string> = {
+        2005: "2005-season-alonso.jpg",
+        2006: "2006-season-alonso.jpg",
+        2019: "2019-season-hamilton.webp",
+        2020: "2020-season-hamilton.jpg",
+        2021: "2021-season-verstappen.jpg",
+        2022: "2022-season-verstappen.jpg",
+        2023: "2023-season-verstappen.jpg",
         2024: "2024-season-verstappen.jpg",
         2025: "2025-season-norris.jpg"
     };
