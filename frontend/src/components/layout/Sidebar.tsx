@@ -19,9 +19,9 @@ import { useState } from "react";
 
 const navItems = [
     { href: "/", label: "Home", icon: Home },
-    { href: "/session/2024/5/R", label: "Session Analyzer", icon: BarChart3 },
-    { href: "/compare", label: "Driver Compare", icon: GitCompare },
-    { href: "/live", label: "Live Timing", icon: Radio },
+    { href: "/analysis/session/2024/5/R", label: "Session Analyzer", icon: BarChart3 },
+    { href: "/analysis/compare", label: "Driver Compare", icon: GitCompare },
+    { href: "/analysis/live", label: "Live Timing", icon: Radio },
     { href: "/settings", label: "Settings", icon: Settings },
 ];
 

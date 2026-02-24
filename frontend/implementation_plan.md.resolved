@@ -1,0 +1,1041 @@
+# MotorSport P1 — F1 Data Analytics Web App
+
+## Visão Geral
+
+Dashboard analítico completo para Fórmula 1: análise pós-sessão, comparação piloto vs piloto, "live timing" quasi-real-time, e biblioteca de sessões históricas — projetado para criadores de conteúdo.
+
+---
+
+## 1. Papel de Cada Fonte de Dados
+
+| Fonte | Papel | Quando Usar | Limitações |
+|-------|-------|-------------|------------|
+| **FastF1** (Python) | **Principal** — telemetria (Speed, RPM, Throttle, Brake, DRS, XYZ), timing de volta, setores, stints, pneus, resultados, circuito info | Análise pós-sessão, comparações, telemetria overlay, delta curva a curva | Sem streaming live nativo; dados completos disponíveis ~2–5 min após fim da sessão; rate-limited pela F1 API |
+| **jolpica-f1** (REST API) | **Metadados & histórico** — pilotos, equipes, circuitos, calendário, standings, resultados históricos, pitstops, qualifying | Biblioteca de sessões, calendário, standings, dados históricos rápidos sem precisar carregar sessão completa | Limite 100 resultados/call; sem telemetria; dados apenas pós-sessão |
+| **f1dataR** (R) | **Descartado** — é wrapper R para FastF1+jolpica | Não usar no projeto; toda funcionalidade já coberta pelo FastF1 Python + jolpica REST diretamente | Adiciona complexidade de R sem benefício |
+
+> [!IMPORTANT]
+> **Live Timing**: FastF1 **não suporta streaming live**. A F1 oficial publica dados via SignalR no `livetiming.formula1.com`. Estratégia: nosso backend faz **polling direto** no endpoint F1 live timing (`livetiming.formula1.com/static/`) a cada 5–10s durante sessões ativas, parseia o JSON, e republica via WebSocket para o frontend. Quando a sessão termina, FastF1 carrega os dados completos para análise detalhada.
+
+---
+
+## 2. Arquitetura do Sistema
+
+```mermaid
+graph TB
+    subgraph "Frontend (Next.js + TS + TailwindCSS)"
+        UI["Pages: Home, Race Weekend, Session Analyzer, Driver Compare, Live Timing, Settings"]
+        WS_CLIENT["WebSocket Client"]
+        CHARTS["ECharts/Recharts"]
+    end
+
+    subgraph "API Gateway (FastAPI)"
+        REST["REST API"]
+        WS_SERVER["WebSocket Server"]
+        AUTH["Auth Middleware (API Key / JWT futuro)"]
+    end
+
+    subgraph "Backend Services (Python)"
+        SESSION_SVC["SessionService"]
+        TELEMETRY_SVC["TelemetryService"]
+        COMPARE_SVC["CompareService"]
+        LIVE_SVC["LiveTimingService"]
+        EXPORT_SVC["ExportService"]
+        SCHEDULE_SVC["ScheduleService"]
+    end
+
+    subgraph "Data Layer"
+        FASTF1["FastF1 Library"]
+        JOLPICA["jolpica-f1 API Client"]
+        LIVE_POLLER["F1 Live Timing Poller"]
+    end
+
+    subgraph "Infrastructure"
+        REDIS["Redis (Cache + Pub/Sub)"]
+        PG["Supabase PostgreSQL (Metadados)"]
+        DISK["Disk Cache (FastF1 built-in)"]
+    end
+
+    UI --> REST
+    UI --> WS_CLIENT
+    WS_CLIENT --> WS_SERVER
+    REST --> AUTH
+    AUTH --> SESSION_SVC
+    AUTH --> TELEMETRY_SVC
+    AUTH --> COMPARE_SVC
+    AUTH --> EXPORT_SVC
+    AUTH --> SCHEDULE_SVC
+    WS_SERVER --> LIVE_SVC
+
+    SESSION_SVC --> FASTF1
+    SESSION_SVC --> REDIS
+    TELEMETRY_SVC --> FASTF1
+    TELEMETRY_SVC --> REDIS
+    COMPARE_SVC --> FASTF1
+    COMPARE_SVC --> REDIS
+    LIVE_SVC --> LIVE_POLLER
+    LIVE_SVC --> REDIS
+    SCHEDULE_SVC --> JOLPICA
+    SCHEDULE_SVC --> REDIS
+    EXPORT_SVC --> SESSION_SVC
+
+    FASTF1 --> DISK
+    JOLPICA -.->|HTTP| REDIS
+    LIVE_POLLER -.->|Polling 5-10s| LIVE_API["livetiming.formula1.com"]
+
+    SESSION_SVC --> PG
+    SCHEDULE_SVC --> PG
+```
+
+### Responsabilidades dos Serviços
+
+| Serviço | Responsabilidade |
+|---------|-----------------|
+| `ScheduleService` | Calendário, lista de corridas, sessões disponíveis (jolpica) |
+| `SessionService` | Carregar sessão FastF1, lap data, stints, resultados |
+| `TelemetryService` | Telemetria detalhada por volta/piloto, mini-setores |
+| `CompareService` | Delta piloto vs piloto, overlay de telemetria, curva a curva |
+| `LiveTimingService` | Polling F1 live API, parsing, broadcast via Redis Pub/Sub → WebSocket |
+| `ExportService` | CSV/JSON export, render de gráficos como imagem (matplotlib → PNG) |
+
+---
+
+## 3. Modelo de Dados
+
+### 3.1 Supabase PostgreSQL (Metadados — tabelas SQL)
+
+```sql
+-- Supabase PostgreSQL — usar via Supabase Client (JS) ou supabase-py (Python)
+-- RLS (Row Level Security) pode ser ativado depois para multi-user
+
+-- Calendário e eventos indexados
+CREATE TABLE seasons (
+    year          INT PRIMARY KEY,
+    total_rounds  INT,
+    synced_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE events (
+    id            SERIAL PRIMARY KEY,
+    season_year   INT REFERENCES seasons(year),
+    round_number  INT,
+    event_name    VARCHAR(100),
+    country       VARCHAR(60),
+    circuit_key   VARCHAR(60),
+    circuit_name  VARCHAR(100),
+    event_date    DATE,
+    event_format  VARCHAR(20), -- 'conventional', 'sprint', 'testing'
+    UNIQUE(season_year, round_number)
+);
+
+CREATE TABLE sessions (
+    id            SERIAL PRIMARY KEY,
+    event_id      INT REFERENCES events(id),
+    session_type  VARCHAR(20), -- 'FP1','FP2','FP3','Q','SQ','S','R'
+    session_date  TIMESTAMPTZ,
+    is_loaded     BOOLEAN DEFAULT FALSE,
+    loaded_at     TIMESTAMPTZ,
+    data_hash     VARCHAR(64) -- SHA256 do cache
+);
+
+-- Favoritos e preferências do usuário
+CREATE TABLE user_favorites (
+    id            SERIAL PRIMARY KEY,
+    entity_type   VARCHAR(20), -- 'driver', 'team', 'circuit', 'session'
+    entity_key    VARCHAR(60), -- 'VER', 'red_bull', 'monza', '2024_5_R'
+    label         VARCHAR(100),
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE user_settings (
+    key           VARCHAR(60) PRIMARY KEY,
+    value         JSONB,
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+> [!TIP]
+> **Supabase**: usar o Supabase JS Client (`@supabase/supabase-js`) no frontend para favoritos/settings (acesso direto), e `supabase-py` no backend Python para seeds e queries pesadas. Isso elimina a necessidade de rodar Postgres local no Docker durante o desenvolvimento.
+
+### 3.2 Objetos de Domínio (API Response Shapes)
+
+```typescript
+// === Session ===
+interface Session {
+  id: string;               // "2024_5_R"  (year_round_type)
+  year: number;
+  round: number;
+  eventName: string;
+  country: string;
+  circuitKey: string;
+  circuitName: string;
+  sessionType: "FP1"|"FP2"|"FP3"|"Q"|"SQ"|"S"|"R";
+  date: string;             // ISO 8601
+  totalLaps: number | null;
+  isLoaded: boolean;
+  drivers: DriverResult[];
+}
+
+// === DriverResult ===
+interface DriverResult {
+  driverNumber: string;      // "1"
+  abbreviation: string;      // "VER"
+  fullName: string;
+  team: string;
+  teamColor: string;         // "#3671C6"
+  position: number | null;
+  gridPosition: number | null;
+  bestLapTime: string | null; // "1:28.256"
+  status: string;
+  points: number;
+}
+
+// === Lap ===
+interface Lap {
+  lapNumber: number;
+  driver: string;            // "VER"
+  driverNumber: string;
+  lapTime: number | null;    // milliseconds
+  sector1: number | null;    // ms
+  sector2: number | null;
+  sector3: number | null;
+  stint: number;
+  compound: "SOFT"|"MEDIUM"|"HARD"|"INTERMEDIATE"|"WET";
+  tyreLife: number;
+  freshTyre: boolean;
+  position: number | null;
+  speedI1: number | null;
+  speedI2: number | null;
+  speedFL: number | null;
+  speedST: number | null;
+  isPersonalBest: boolean;
+  deleted: boolean;
+  trackStatus: string;
+}
+
+// === Telemetry (per-sample, downsampled) ===
+interface TelemetrySample {
+  distance: number;          // metros desde start/finish
+  time: number;              // ms desde início da volta
+  speed: number;             // km/h
+  throttle: number;          // 0-100
+  brake: boolean;
+  rpm: number;
+  gear: number;
+  drs: number;
+  x: number;
+  y: number;
+  z: number;
+}
+
+// === Stint ===
+interface Stint {
+  stintNumber: number;
+  driver: string;
+  compound: string;
+  startLap: number;
+  endLap: number;
+  tyreAge: number;           // vida final
+  freshTyre: boolean;
+  avgLapTime: number | null; // ms (excluindo in/out)
+  laps: number;
+}
+
+// === TrackMap ===
+interface TrackMap {
+  circuitKey: string;
+  corners: { number: number; x: number; y: number; angle: number }[];
+  marshalSectors: { number: number; x: number; y: number }[];
+  rotation: number;
+  xMin: number; xMax: number;
+  yMin: number; yMax: number;
+}
+
+// === LiveTimingState ===
+interface LiveTimingState {
+  sessionStatus: "Inactive"|"Started"|"Finished"|"Finalised"|"Aborted";
+  trackStatus: string;
+  timestamp: string;
+  drivers: LiveDriver[];
+  raceControlMessages: RaceControlMessage[];
+}
+
+interface LiveDriver {
+  driverNumber: string;
+  abbreviation: string;
+  position: number;
+  lastLapTime: string | null;
+  bestLapTime: string | null;
+  sector1: string | null;
+  sector2: string | null;
+  sector3: string | null;
+  gap: string | null;
+  interval: string | null;
+  inPit: boolean;
+  retired: boolean;
+  compound: string | null;
+  tyreAge: number | null;
+}
+
+interface RaceControlMessage {
+  utc: string;
+  category: string;
+  message: string;
+  flag: string | null;
+}
+```
+
+---
+
+## 4. Especificação de API
+
+### 4.1 REST Endpoints
+
+#### Schedule & Metadata (jolpica-backed)
+
+```
+GET /api/v1/seasons
+  → { seasons: [{ year, totalRounds }] }
+
+GET /api/v1/seasons/{year}/events
+  → { events: [Event] }
+
+GET /api/v1/seasons/{year}/events/{round}
+  → { event: Event, sessions: [SessionSummary] }
+
+GET /api/v1/standings/{year}/drivers
+  → { standings: [{ position, driver, points, wins }] }
+
+GET /api/v1/standings/{year}/constructors
+  → { standings: [{ position, constructor, points, wins }] }
+```
+
+#### Session & Laps (FastF1-backed)
+
+```
+GET /api/v1/session/{year}/{round}/{session_type}
+  → { session: Session }
+  // Triggers FastF1 load if not cached
+
+GET /api/v1/session/{year}/{round}/{session_type}/laps
+  ?driver=VER,HAM          (opcional, filtro por piloto)
+  ?stint=2                  (opcional)
+  ?exclude_pit=true         (excluir pit in/out laps)
+  → { laps: Lap[], drivers: string[] }
+
+GET /api/v1/session/{year}/{round}/{session_type}/laps/{lap_number}
+  → { lap: Lap[], telemetry_available: boolean }
+
+GET /api/v1/session/{year}/{round}/{session_type}/stints
+  ?driver=VER
+  → { stints: Stint[] }
+```
+
+#### Telemetry (FastF1-backed)
+
+```
+GET /api/v1/session/{year}/{round}/{session_type}/telemetry
+  ?driver=VER
+  &lap=fastest              ("fastest", "all", ou número)
+  &frequency=4              (Hz, default 4, max original ~3.7Hz)
+  → { telemetry: TelemetrySample[], trackMap: TrackMap }
+
+GET /api/v1/session/{year}/{round}/{session_type}/telemetry/compare
+  ?drivers=VER,HAM
+  &lap=fastest              (compara fastest laps)
+  → {
+      drivers: {
+        VER: { telemetry: TelemetrySample[], bestLapTime: number },
+        HAM: { telemetry: TelemetrySample[], bestLapTime: number }
+      },
+      delta: { distance: number, deltaTime: number }[],
+      trackMap: TrackMap
+    }
+```
+
+**Exemplo de Request/Response — Telemetry Compare:**
+
+```
+GET /api/v1/session/2024/5/Q/telemetry/compare?drivers=VER,NOR&lap=fastest
+
+Response 200:
+{
+  "drivers": {
+    "VER": {
+      "bestLapTime": 88256,
+      "telemetry": [
+        {"distance": 0, "time": 0, "speed": 285, "throttle": 100, "brake": false, "rpm": 10500, "gear": 7, "drs": 0, "x": 1200, "y": -4500, "z": 10},
+        {"distance": 10, "time": 126, "speed": 287, ...},
+        ...
+      ]
+    },
+    "NOR": {
+      "bestLapTime": 88412,
+      "telemetry": [...]
+    }
+  },
+  "delta": [
+    {"distance": 0, "deltaTime": 0},
+    {"distance": 100, "deltaTime": -0.012},
+    {"distance": 200, "deltaTime": -0.035},
+    ...
+  ],
+  "trackMap": {
+    "circuitKey": "silverstone",
+    "corners": [{"number": 1, "x": 1500, "y": -4200, "angle": 90}, ...],
+    "rotation": 0,
+    "xMin": -1000, "xMax": 5000, "yMin": -8000, "yMax": 1000
+  }
+}
+```
+
+#### Compare (FastF1-backed)
+
+```
+GET /api/v1/compare/pace
+  ?year=2024&round=5&session=R
+  &drivers=VER,HAM
+  → {
+      drivers: {
+        VER: { avgPace: number, cleanLaps: Lap[], stints: Stint[] },
+        HAM: { avgPace: number, cleanLaps: Lap[], stints: Stint[] }
+      },
+      deltaPerLap: { lapNumber: number, delta: number }[]
+    }
+
+GET /api/v1/compare/corners
+  ?year=2024&round=5&session=Q
+  &drivers=VER,NOR&lap=fastest
+  → {
+      corners: [
+        { number: 1, delta: -0.045, ver_speed: 185, nor_speed: 182 },
+        { number: 2, delta: 0.012, ver_speed: 220, nor_speed: 222 },
+        ...
+      ]
+    }
+```
+
+#### Export
+
+```
+GET /api/v1/export/csv
+  ?year=2024&round=5&session=R
+  &data=laps                  ("laps", "telemetry", "stints")
+  &driver=VER
+  → Content-Type: text/csv
+
+GET /api/v1/export/chart
+  ?year=2024&round=5&session=Q
+  &chart=speed_trace
+  &drivers=VER,NOR
+  &format=png                 ("png", "svg")
+  → Content-Type: image/png
+```
+
+#### Favorites
+
+```
+GET    /api/v1/favorites           → { favorites: Favorite[] }
+POST   /api/v1/favorites           { entityType, entityKey, label }
+DELETE /api/v1/favorites/{id}
+```
+
+### 4.2 WebSocket Events (Live Timing)
+
+```
+// Client connects:
+ws://localhost:8000/ws/live/{year}/{round}/{session_type}
+
+// Server → Client events:
+{
+  "event": "timing_update",
+  "data": {
+    "timestamp": "2024-07-07T14:32:15Z",
+    "drivers": [LiveDriver, ...],
+    "sessionStatus": "Started",
+    "trackStatus": "AllClear",
+    "lap": 25
+  }
+}
+
+{
+  "event": "race_control",
+  "data": {
+    "utc": "2024-07-07T14:32:15Z",
+    "category": "Flag",
+    "message": "YELLOW FLAG IN TURN 3",
+    "flag": "YELLOW"
+  }
+}
+
+{
+  "event": "session_status",
+  "data": {
+    "status": "Finished",
+    "message": "CHEQUERED FLAG"
+  }
+}
+
+// Client → Server:
+{
+  "action": "subscribe",
+  "drivers": ["VER", "HAM"]  // (opcional: filtrar updates por piloto)
+}
+```
+
+### 4.3 Estratégia de Live Timing
+
+```mermaid
+sequenceDiagram
+    participant F1 as F1 Live Timing API
+    participant Poller as LiveTimingPoller
+    participant Redis as Redis Pub/Sub
+    participant WS as WebSocket Server
+    participant Client as Frontend
+
+    Note over F1: Sessão ativa
+    loop A cada 5-10s
+        Poller->>F1: GET /static/{session}/TimingData.json
+        F1-->>Poller: JSON timing data
+        Poller->>Redis: PUBLISH live:timing:{sessionKey}
+        Poller->>Redis: SET live:state:{sessionKey} (último estado)
+    end
+    
+    Redis-->>WS: SUBSCRIBE live:timing:{sessionKey}
+    WS-->>Client: WS message "timing_update"
+
+    Note over Poller: Sessão termina
+    Poller->>Redis: PUBLISH live:timing:{sessionKey} (status=Finished)
+    Note over Poller: Trigger FastF1 full load (background task)
+```
+
+> [!WARNING]
+> **Limitações Reais do Live Timing:**
+> - A F1 não oferece API pública de streaming. O endpoint `livetiming.formula1.com/static/` fornece JSONs estáticos atualizados durante a sessão
+> - Latência real: **5–15 segundos** atrás da TV (polling + processamento)
+> - Telemetria detalhada (speed, throttle) **NÃO está disponível live** — apenas timing (sector times, gaps, positions)
+> - Mini-setores live **não existem** — apenas 3 setores por volta
+> - **Fallback quando sem sessão ativa**: modo "replay" reconstrói dados de sessões passadas com timestamps simulados
+> - Rate limit: polling mais que 1x/5s pode ser bloqueado
+
+---
+
+## 5. Estratégia de Cache
+
+### 5.1 Camadas de Cache
+
+| Camada | Tech | Uso |
+|--------|------|-----|
+| **L1 — FastF1 Disk** | Disco local (built-in FastF1) | Dados brutos da F1 API; nunca expira para sessões encerradas |
+| **L2 — Redis** | Redis | Respostas processadas do backend; acesso rápido |
+| **L3 — CDN Response** | Next.js `revalidate` | Respostas HTTP cacheadas no frontend |
+
+### 5.2 Chaves e TTL
+
+| Dado | Chave Redis | TTL | Invalidação |
+|------|-------------|-----|-------------|
+| Schedule (temporada) | `schedule:{year}` | 24h | Manual ou ao iniciar nova season |
+| Event detail | `event:{year}:{round}` | 24h | Quando sessão carregada |
+| Session laps | `session:{year}:{round}:{type}:laps` | ∞ (sessão encerrada) | Nunca (dado imutável) |
+| Session laps (filtrado) | `session:{year}:{round}:{type}:laps:driver:{abbr}` | ∞ | Nunca |
+| Stints | `session:{year}:{round}:{type}:stints` | ∞ | Nunca |
+| Telemetria (per driver/lap) | `telemetry:{year}:{round}:{type}:{driver}:{lap}` | ∞ | Nunca |
+| Compare result | `compare:{year}:{round}:{type}:{d1}:{d2}:{lap}` | ∞ | Nunca |
+| Standings | `standings:{year}:drivers` | 1h durante season; 24h off-season | Após cada corrida |
+| Live timing state | `live:state:{sessionKey}` | 30s | Cada polling cycle |
+| Export (chart PNG) | `export:{hash}` | 1h | LRU eviction |
+
+> [!TIP]
+> **Dados de sessões encerradas são imutáveis** — cache infinito. Apenas standings e schedule precisam de TTL curto. Isso reduz drasticamente requests à F1 API.
+
+### 5.3 Flow de Cache
+
+```
+Request → Redis L2 hit? → return
+                       ↓ miss
+          FastF1 disk L1 hit? → process → store Redis → return
+                             ↓ miss
+          FastF1 API call → store disk → process → store Redis → return
+```
+
+---
+
+## 6. Páginas do Frontend e Componentes
+
+### 6.1 Home / Season (`/`)
+
+- **SeasonHeader**: ano atual, seletor de temporada
+- **NextRaceCard**: próximo GP com countdown, circuito, sessões
+- **CalendarGrid**: lista de GPs com status (futuro/concluído)
+- **StandingsPreview**: top 5 pilotos + construtores mini-table
+- **RecentSessionCard**: últimas 3 sessões analisadas (quick-access)
+- **FavoritesBar**: acesso rápido a sessões/pilotos favoritados
+
+### 6.2 Race Weekend (`/race/{year}/{round}`)
+
+- **EventHeader**: nome do GP, país, circuito, datas
+- **TrackMapWidget**: mapa do circuito com curvas numeradas
+- **SessionTabs**: FP1, FP2, FP3, Q, Sprint, Race — com status
+- **ResultsTable**: classificação final da sessão selecionada
+- **WeatherWidget**: condições durante a sessão
+- **QuickStatsGrid**: pole, fastest lap, winner, leader laps
+
+### 6.3 Session Analyzer (`/session/{year}/{round}/{type}`)
+
+- **LapTimesChart**: scatter plot voltas x tempo por piloto (ECharts)
+- **StintTimeline**: barra horizontal por stint/composto com degradação
+- **PositionChart**: line chart posição por volta (Race)
+- **GapChart**: gap ao líder por volta
+- **SectorAnalysis**: heatmap setores (purple/green/yellow personal)
+- **SpeedTraps**: barra velocidade por piloto nos 4 speed traps
+- **TyreStrategy**: visual timeline de compounds por piloto
+- **LapDataTable**: tabela paginada com todas as voltas + filtros
+- **DriverSelector**: checkbox multi-select com cores de equipe
+
+### 6.4 Driver Compare (`/compare`)
+
+- **DriverPickerDual**: 2 seletores de piloto side-by-side
+- **SessionPicker**: seletor de sessão para comparação
+- **SpeedTraceOverlay**: telemetria Speed vs Distance sobrepostas
+- **ThrottleBrakeOverlay**: throttle + brake traces sobrepostos
+- **DeltaChart**: delta time por distância (quem ganha onde)
+- **CornerAnalysis**: tabela curva a curva com delta por curva
+- **TrackDeltaMap**: mapa do circuito colorido por delta
+- **SectorComparison**: 3 setores side-by-side
+- **MiniSectorBreakdown**: se disponível, sub-setores
+
+### 6.5 Live Timing (`/live`)
+
+- **SessionStatusBanner**: status da sessão + bandeiras
+- **LiveTimingTable**: tabela ao vivo estilo F1 TV (pos, driver, gap, interval, sector colors, tyre)
+- **RaceControlFeed**: mensagens de direção de prova em feed
+- **GapChartLive**: gap visual atualizado em tempo real
+- **TrackPositionMap**: posições no circuito (se dados XY disponíveis)
+- **ConnectionIndicator**: status da conexão WebSocket
+- **FallbackBanner**: aviso quando em modo replay ou sem dados live
+
+### 6.6 Settings / Favorites (`/settings`)
+
+- **FavoritesList**: gerenciar pilotos/equipes/circuitos favoritados
+- **ThemeToggle**: dark/light mode
+- **CacheManager**: ver estado do cache, forçar refresh
+- **ExportPreferences**: formato padrão de export
+- **DataSourceStatus**: health check das APIs
+
+---
+
+## 7. Estrutura do Repositório (Monorepo)
+
+```
+motorsportp1/
+├── README.md
+├── docker-compose.yml
+├── .env.example
+├── .gitignore
+│
+├── backend/
+│   ├── pyproject.toml                   # Python deps (fastf1, fastapi, redis, etc.)
+│   ├── Dockerfile
+│   ├── alembic/                         # DB migrations
+│   │   ├── alembic.ini
+│   │   └── versions/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py                      # FastAPI app, CORS, lifespan
+│   │   ├── config.py                    # Settings (pydantic-settings)
+│   │   ├── dependencies.py              # DI (Redis, DB session)
+│   │   │
+│   │   ├── api/                         # Routers
+│   │   │   ├── __init__.py
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── schedule.py          # /seasons, /events
+│   │   │   │   ├── session.py           # /session/{...}/laps, stints
+│   │   │   │   ├── telemetry.py         # /telemetry, /telemetry/compare
+│   │   │   │   ├── compare.py           # /compare/pace, /compare/corners
+│   │   │   │   ├── standings.py         # /standings
+│   │   │   │   ├── export.py            # /export/csv, /export/chart
+│   │   │   │   ├── favorites.py         # /favorites
+│   │   │   │   └── live.py              # WebSocket /ws/live
+│   │   │   └── router.py               # Aggregate router
+│   │   │
+│   │   ├── services/                    # Business logic
+│   │   │   ├── __init__.py
+│   │   │   ├── schedule_service.py
+│   │   │   ├── session_service.py
+│   │   │   ├── telemetry_service.py
+│   │   │   ├── compare_service.py
+│   │   │   ├── live_timing_service.py
+│   │   │   ├── export_service.py
+│   │   │   └── cache_service.py
+│   │   │
+│   │   ├── models/                      # Pydantic schemas
+│   │   │   ├── __init__.py
+│   │   │   ├── session.py
+│   │   │   ├── lap.py
+│   │   │   ├── telemetry.py
+│   │   │   ├── driver.py
+│   │   │   ├── stint.py
+│   │   │   ├── standings.py
+│   │   │   ├── live.py
+│   │   │   └── export.py
+│   │   │
+│   │   ├── db/                          # Database (Supabase)
+│   │   │   ├── __init__.py
+│   │   │   ├── supabase_client.py       # supabase-py client init
+│   │   │   └── repositories/
+│   │   │       ├── event_repo.py
+│   │   │       ├── session_repo.py
+│   │   │       └── favorites_repo.py
+│   │   │
+│   │   ├── clients/                     # External API clients
+│   │   │   ├── __init__.py
+│   │   │   ├── jolpica_client.py        # httpx client for jolpica
+│   │   │   ├── fastf1_client.py         # Wrapper around fastf1 lib
+│   │   │   └── live_timing_client.py    # Poller for F1 live timing
+│   │   │
+│   │   └── utils/
+│   │       ├── __init__.py
+│   │       ├── converters.py            # Pandas → Pydantic
+│   │       ├── delta.py                 # Cálculo de delta
+│   │       └── chart_renderer.py        # Matplotlib export
+│   │
+│   └── tests/
+│       ├── conftest.py
+│       ├── test_session_service.py
+│       ├── test_telemetry_service.py
+│       └── test_compare_service.py
+│
+├── frontend/
+│   ├── package.json
+│   ├── next.config.js
+│   ├── tailwind.config.ts
+│   ├── tsconfig.json
+│   ├── Dockerfile
+│   ├── public/
+│   │   └── assets/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── layout.tsx
+│   │   │   ├── page.tsx                 # Home / Season
+│   │   │   ├── race/
+│   │   │   │   └── [year]/[round]/
+│   │   │   │       └── page.tsx         # Race Weekend
+│   │   │   ├── session/
+│   │   │   │   └── [year]/[round]/[type]/
+│   │   │   │       └── page.tsx         # Session Analyzer
+│   │   │   ├── compare/
+│   │   │   │   └── page.tsx             # Driver Compare
+│   │   │   ├── live/
+│   │   │   │   └── page.tsx             # Live Timing
+│   │   │   └── settings/
+│   │   │       └── page.tsx
+│   │   │
+│   │   ├── components/
+│   │   │   ├── ui/                      # Generic UI (Button, Card, Modal, etc.)
+│   │   │   ├── charts/
+│   │   │   │   ├── LapTimesChart.tsx
+│   │   │   │   ├── SpeedTraceChart.tsx
+│   │   │   │   ├── DeltaChart.tsx
+│   │   │   │   ├── PositionChart.tsx
+│   │   │   │   ├── GapChart.tsx
+│   │   │   │   └── StintTimeline.tsx
+│   │   │   ├── track/
+│   │   │   │   ├── TrackMapWidget.tsx
+│   │   │   │   └── TrackDeltaMap.tsx
+│   │   │   ├── live/
+│   │   │   │   ├── LiveTimingTable.tsx
+│   │   │   │   └── RaceControlFeed.tsx
+│   │   │   ├── session/
+│   │   │   │   ├── DriverSelector.tsx
+│   │   │   │   ├── SessionPicker.tsx
+│   │   │   │   └── LapDataTable.tsx
+│   │   │   └── layout/
+│   │   │       ├── Navbar.tsx
+│   │   │       ├── Sidebar.tsx
+│   │   │       └── Footer.tsx
+│   │   │
+│   │   ├── hooks/
+│   │   │   ├── useSession.ts
+│   │   │   ├── useTelemetry.ts
+│   │   │   ├── useLiveTiming.ts
+│   │   │   └── useCompare.ts
+│   │   │
+│   │   ├── lib/
+│   │   │   ├── api.ts                   # API client (fetch wrapper)
+│   │   │   ├── supabase.ts              # Supabase client init
+│   │   │   ├── ws.ts                    # WebSocket client
+│   │   │   ├── mock-data/               # Mock data for frontend-first dev
+│   │   │   │   ├── schedule.ts          # Mock seasons, events
+│   │   │   │   ├── session.ts           # Mock laps, stints, results
+│   │   │   │   ├── telemetry.ts         # Mock telemetry samples
+│   │   │   │   ├── compare.ts           # Mock delta, corners
+│   │   │   │   ├── live.ts              # Mock live timing state
+│   │   │   │   └── standings.ts         # Mock driver/constructor standings
+│   │   │   └── utils.ts
+│   │   │
+│   │   ├── types/
+│   │   │   └── index.ts                 # All TypeScript interfaces
+│   │   │
+│   │   └── styles/
+│   │       └── globals.css
+│   │
+│   └── tests/
+│       └── ...
+│
+└── infra/
+    ├── docker/
+    │   └── redis.conf
+    └── scripts/
+        ├── seed_schedule.py             # Populate Supabase with calendar
+        └── preload_cache.py             # Warm cache for popular sessions
+```
+
+---
+
+## 8. Roadmap em Fases
+
+> [!IMPORTANT]
+> **Estratégia Frontend-First**: construir todas as páginas com mock data realista primeiro. Isso permite iterar no design e UX sem esperar o backend, e depois "plugar" as APIs reais substituindo os imports de mock por chamadas HTTP.
+
+### Fase 1 (Semanas 1–2) — "Frontend completo com mock data"
+
+- [ ] Next.js setup + Tailwind + design system (cores F1, dark mode)
+- [ ] TypeScript types + mock data realista para todas as entidades
+- [ ] Componentes UI base (Button, Card, Table, Tabs, Select)
+- [ ] **Home page**: calendário, standings preview, next race countdown
+- [ ] **Race Weekend page**: event header, track map, session tabs, results table
+- [ ] **Session Analyzer page**: lap times chart, stint timeline, position chart, gap chart, sector analysis, tyre strategy
+- [ ] **Driver Compare page**: dual driver picker, speed trace overlay, delta chart, corner analysis, track delta map
+- [ ] **Live Timing page**: timing table (mock estático), race control feed, gap chart
+- [ ] **Settings page**: favorites, theme toggle, export prefs
+- [ ] Navegação completa entre todas as páginas
+- [ ] Dark mode funcional
+
+### Fase 2 (Semanas 3–5) — "Backend + integração + Supabase"
+
+- [ ] FastAPI boilerplate + Docker Compose (FastAPI + Redis)
+- [ ] Supabase project setup + tabelas SQL + seed calendário
+- [ ] FastF1 client wrapper + cache em disco + Redis
+- [ ] jolpica client para metadados históricos
+- [ ] REST endpoints: schedule, session, laps, stints, telemetry, compare
+- [ ] Substituir mock data por chamadas API reais no frontend
+- [ ] Supabase client no frontend para favoritos/settings
+- [ ] Export CSV/JSON + chart PNG (matplotlib)
+- [ ] 3 análises assinatura implementadas no backend
+
+### Fase 3 (Semanas 6–8) — "Live timing, replay e polish"
+
+- [ ] LiveTimingPoller + Redis Pub/Sub
+- [ ] WebSocket broadcast + integração frontend
+- [ ] Modo replay (reconstituição de sessão passada como "live")
+- [ ] TrackMap interativo com posições live
+- [ ] Performance tuning, preload scripts
+- [ ] Deploy (Docker → Railway/Fly.io + Supabase cloud)
+
+---
+
+## 9. Tarefas de Implementação (1–2h cada)
+
+### Fase 1 — Frontend (Mock Data)
+
+| # | Tarefa | Tempo | Dependência |
+|---|--------|-------|-----------|
+| 1 | Next.js init + Tailwind config + design tokens (cores F1, tipografia, dark mode) | 1.5h | — |
+| 2 | Layout global: Navbar, Sidebar, Footer, theme provider | 2h | 1 |
+| 3 | Componentes UI base: Button, Card, Badge, Table, Tabs, Select, Modal | 2h | 1 |
+| 4 | TypeScript types (todas as interfaces: Session, Lap, Telemetry, etc.) | 1h | — |
+| 5 | Mock data completo: `schedule.ts`, `session.ts`, `standings.ts` (dados realistas 2024) | 2h | 4 |
+| 6 | Mock data completo: `telemetry.ts`, `compare.ts`, `live.ts` | 2h | 4 |
+| 7 | **Home page**: SeasonHeader + NextRaceCard (countdown) + CalendarGrid | 2h | 2, 3, 5 |
+| 8 | **Home page**: StandingsPreview + RecentSessionCard + FavoritesBar | 1.5h | 7 |
+| 9 | **Race Weekend page**: EventHeader + TrackMapWidget (SVG estático) + SessionTabs | 2h | 3, 5 |
+| 10 | **Race Weekend page**: ResultsTable + WeatherWidget + QuickStatsGrid | 2h | 9 |
+| 11 | **Session Analyzer**: DriverSelector + LapTimesChart (ECharts scatter) | 2h | 3, 5 |
+| 12 | **Session Analyzer**: StintTimeline + TyreStrategy visual | 2h | 11 |
+| 13 | **Session Analyzer**: PositionChart + GapChart + SectorAnalysis heatmap | 2h | 11 |
+| 14 | **Session Analyzer**: SpeedTraps bar + LapDataTable paginada | 2h | 11 |
+| 15 | **Driver Compare**: DriverPickerDual + SessionPicker | 1.5h | 3, 6 |
+| 16 | **Driver Compare**: SpeedTraceOverlay + ThrottleBrakeOverlay (ECharts) | 2h | 6, 15 |
+| 17 | **Driver Compare**: DeltaChart + CornerAnalysis table | 2h | 6, 15 |
+| 18 | **Driver Compare**: TrackDeltaMap (circuito colorido) + SectorComparison | 2h | 17 |
+| 19 | **Live Timing**: LiveTimingTable (mock estático estilo F1 TV) + RaceControlFeed | 2h | 3, 6 |
+| 20 | **Live Timing**: GapChartLive + TrackPositionMap + ConnectionIndicator | 2h | 19 |
+| 21 | **Settings**: FavoritesList + ThemeToggle + ExportPreferences + DataSourceStatus | 1.5h | 3 |
+| 22 | Polish: loading skeletons, transitions, responsive, error states | 2h | 7–21 |
+| 23 | Navegação completa: links entre páginas, breadcrumbs, deep links | 1h | 7–21 |
+
+### Fase 2 — Backend + Integração
+
+| # | Tarefa | Tempo | Dependência |
+|---|--------|-------|-----------|
+| 24 | FastAPI boilerplate: main.py, config.py, CORS, health check | 1h | — |
+| 25 | Docker Compose: FastAPI + Redis | 1h | 24 |
+| 26 | Supabase project setup + criar tabelas SQL + RLS básico | 1.5h | — |
+| 27 | `supabase.ts` frontend client + `supabase_client.py` backend | 1h | 26 |
+| 28 | `fastf1_client.py`: wrapper para `fastf1.get_session()` com cache config | 1h | 24 |
+| 29 | `cache_service.py`: Redis get/set com serialização JSON | 1h | 25 |
+| 30 | `jolpica_client.py`: httpx client com retry + rate limit | 1h | 24 |
+| 31 | `schedule_service.py` + router `/seasons`, `/events` | 1.5h | 27, 30 |
+| 32 | `session_service.py`: carregar sessão, converter laps Pandas → Pydantic | 2h | 28, 29 |
+| 33 | Router `/session/{...}/laps` e `/session/{...}/stints` | 1.5h | 32 |
+| 34 | `telemetry_service.py`: extrair telemetria por driver/lap, downsample | 2h | 32 |
+| 35 | Router `/telemetry` e `/telemetry/compare` | 1.5h | 34 |
+| 36 | `compare_service.py`: delta calculation, corner-by-corner | 2h | 34 |
+| 37 | `api.ts` — substituir mock imports por fetch ao backend real | 2h | 31–36 |
+| 38 | Favoritos via Supabase client direto no frontend | 1h | 27 |
+| 39 | Export CSV/JSON endpoint + frontend download | 1h | 32 |
+| 40 | `chart_renderer.py`: matplotlib → PNG + export endpoint | 2h | 34 |
+| 41 | 3 análises assinatura no backend (ver seção 10) | 3h | 36 |
+| 42 | `seed_schedule.py`: popular Supabase com calendário via jolpica | 1h | 27, 30 |
+
+### Fase 3 — Live Timing + Deploy
+
+| # | Tarefa | Tempo | Dependência |
+|---|--------|-------|-----------|
+| 43 | `live_timing_client.py`: poller HTTP para livetiming.formula1.com | 2h | 29 |
+| 44 | `live_timing_service.py`: parse + Redis Pub/Sub publish | 2h | 43 |
+| 45 | WebSocket endpoint `/ws/live/{...}` + broadcast subscribers | 2h | 44 |
+| 46 | `useLiveTiming` hook + WebSocket client → substituir mock na Live page | 1.5h | 45 |
+| 47 | Modo replay: carregar dados FastF1, emitir como stream com delays simulados | 2h | 44 |
+| 48 | TrackMapWidget: upgrade para SVG interativo com posições live | 2h | 46 |
+| 49 | `preload_cache.py`: warm cache para N últimas sessões | 1h | 32 |
+| 50 | Docker multi-stage build + docker-compose production | 2h | 25 |
+| 51 | Deploy (Railway/Fly.io + Supabase cloud + Vercel frontend) + CI | 2h | 50 |
+
+---
+
+## 10. 3 Análises "Assinatura" para Conteúdo
+
+### 10.1 🏎️ "Onde Ele Ganhou Tempo?" — Delta por Curvas
+
+**O que faz**: Pega duas voltas (ex: Verstappen vs Norris no Q3), calcula delta por distância, e marca no mapa do circuito exatamente em quais curvas cada piloto ganhou ou perdeu tempo.
+
+**Dados necessários**: `telemetry/compare` endpoint → TelemetrySample[] de ambos + TrackMap corners
+
+**Visual**:
+- Gráfico de delta (acima/abaixo de zero) com curvas marcadas
+- Mapa do circuito colorido: verde = driver1 ganha, vermelho = driver2 ganha, intensidade = magnitude
+- Tabela: curva | delta | vel. driver1 | vel. driver2
+
+**Implementação**: `CompareService.corner_delta()` → identifica segmentos entre corners, calcula delta acumulado entre entry/exit de cada curva
+
+---
+
+### 10.2 📊 "Pace Real vs Tráfego" — Clean Laps Analysis
+
+**O que faz**: Filtra voltas de corrida removendo: pit in/out laps, voltas com bandeira amarela/SC/VSC, voltas com tráfego (delta ao carro da frente < 1.5s). Mostra o pace "verdadeiro" de cada piloto por stint.
+
+**Dados necessários**: `session/laps` com `trackStatus`, posições, gaps + `stints`
+
+**Visual**:
+- Box plot comparando pace bruto vs pace limpo por piloto
+- Scatter plot de voltas: cor por clean/dirty, facetado por stint
+- Ranking: quem tinha mais pace REAL (removendo variáveis externas)
+
+**Implementação**: `CompareService.clean_pace()` → filtra laps com `trackStatus != '1'`, remove outliers (>107% do median), calcula running average
+
+---
+
+### 10.3 📉 "Degradação por Stint e Composto" — Tyre Deg Deep Dive
+
+**O que faz**: Para cada stint da corrida, calcula a taxa de degradação (slope) do tempo de volta, separado por composto. Permite comparar: "Quem degradou mais nos mediums? O hard aguentou até quando?"
+
+**Dados necessários**: `session/stints` + `session/laps` filtradas por stint
+
+**Visual**:
+- Line chart: cada stint como linha, x=lap-in-stint, y=lap time, com regressão linear mostrando slope
+- Bar chart: degradação (ms/volta) por piloto e composto
+- Heatmap: pilotos (y) x stints (x), cor = degradação
+
+**Implementação**: `SessionService.tyre_degradation()` → por stint limpo, `numpy.polyfit(laps, times, 1)` para slope, normaliza pelo fuel-effect (~0.06s/lap)
+
+---
+
+## 11. MVP em 7 Dias (Frontend-First)
+
+> [!NOTE]
+> Os 7 dias focam **100% no frontend** com mock data. Zero dependência de backend. No final, todas as 6 páginas estão funcionais, navegáveis e visualmente polidas. A integração com APIs reais vem na Fase 2.
+
+### Dia 1: Setup + Design System
+- Next.js init + TailwindCSS + Google Fonts (Inter/Outfit)
+- Design tokens: paleta F1 (dark mode default), gradientes, shadows
+- Layout global: Navbar com logo + links, Sidebar colapsável, Footer
+- Theme provider (dark/light toggle)
+- **Entregável**: `npm run dev` funciona, layout com navbar/sidebar renderiza, dark mode toggle funcional
+
+### Dia 2: Types + Mock Data + Componentes UI Base
+- TypeScript interfaces para todos os objetos de domínio
+- Mock data realista: calendário 2024 (24 GPs), standings, 3 sessões completas com laps
+- Componentes UI: Button, Card, Badge, Table, Tabs, Select, Skeleton loader
+- **Entregável**: `types/index.ts` + `mock-data/*.ts` + storybook-like de componentes
+
+### Dia 3: Home + Race Weekend
+- **Home page**: SeasonHeader, NextRaceCard com countdown, CalendarGrid (24 GPs), StandingsPreview (top 5)
+- **Race Weekend page**: EventHeader, SessionTabs, ResultsTable com dados mock
+- Navegação Home → clique no GP → Race Weekend
+- **Entregável**: navegar pela Home, ver calendário, clicar em GP e ver resultados
+
+### Dia 4: Session Analyzer (Parte 1)
+- DriverSelector (multi-select com cores de equipe)
+- LapTimesChart (ECharts scatter plot — o gráfico mais importante)
+- StintTimeline + TyreStrategy visual (barras horizontais coloridas por compound)
+- **Entregável**: abrir sessão, selecionar pilotos, ver scatter plot + strategy de pneus
+
+### Dia 5: Session Analyzer (Parte 2)
+- PositionChart (line chart posição por volta)
+- GapChart (gap ao líder por volta)
+- SectorAnalysis (heatmap purple/green/yellow)
+- SpeedTraps (bar chart) + LapDataTable paginada
+- **Entregável**: Session Analyzer completo com todos os gráficos e tabela
+
+### Dia 6: Driver Compare + Live Timing
+- **Driver Compare**: DriverPickerDual, SpeedTraceOverlay, DeltaChart, CornerAnalysis table, TrackDeltaMap
+- **Live Timing**: LiveTimingTable (estática com mock), RaceControlFeed, ConnectionIndicator
+- **Entregável**: comparar dois pilotos com overlay de telemetria mock; ver timing table estilo F1 TV
+
+### Dia 7: Settings + Polish Final
+- **Settings page**: FavoritesList, ThemeToggle, ExportPreferences
+- Loading skeletons em todas as páginas
+- Animações de transição entre páginas
+- Responsive (mobile-friendly para timing table)
+- README com screenshots
+- **Entregável**: app completo, 6 páginas navegáveis, dark mode, polido, pronto para demo
+
+> [!TIP]
+> Após os 7 dias, o frontend está **completo e apresentável**. A Fase 2 foca em: (1) setup do backend FastAPI, (2) Supabase para metadados, (3) substituir mock por dados reais — sem precisar tocar no layout.
+
+---
+
+## Decisão sobre f1dataR
+
+**Decisão: NÃO USAR f1dataR.** Justificativa:
+- É um wrapper R para FastF1 + jolpica — não agrega dados novos
+- Adicionar R ao stack (que é Python + Next.js) cria complexidade desnecessária
+- Toda a funcionalidade já está coberta: FastF1 (Python) para telemetria/timing, jolpica (REST) para metadados
+- Se no futuro precisar de análises estatísticas específicas de R, podemos usar `rpy2` ou migrar a lógica para Python com `scipy`/`statsmodels`
+
+## Verificação
+
+### Testes Automatizados
+- Backend: `pytest` com fixtures de dados FastF1 mockados (não depender de API live nos testes)
+- Frontend: testes de componente com Vitest/React Testing Library para charts e hooks
+- Integração (Fase 2+): `docker compose up` + script que testa todos os endpoints REST com `httpx`
+
+### Verificação Manual
+
+**Fase 1 (Frontend):**
+1. `npm run dev` e acessar `http://localhost:3000`
+2. Navegar entre todas as 6 páginas via navbar/sidebar
+3. Verificar que calendário 2024 aparece na Home com dados mock
+4. Abrir Session Analyzer, selecionar pilotos, confirmar que todos os charts renderizam
+5. Abrir Driver Compare, selecionar 2 pilotos, confirmar overlay de telemetria
+6. Verificar dark mode toggle em todas as páginas
+7. Verificar responsividade no mobile (Live Timing table)
+
+**Fase 2 (Backend):**
+1. `docker compose up` e verificar que FastAPI + Redis iniciam
+2. Testar `GET /api/v1/seasons/2024/events` retorna dados reais do jolpica
+3. Testar `GET /api/v1/session/2024/5/Q/laps` retorna dados reais do FastF1
+4. Confirmar que frontend consome API real em vez de mock data
+5. Testar favoritos via Supabase (criar/listar/deletar)

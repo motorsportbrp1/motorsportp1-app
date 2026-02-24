@@ -6,7 +6,11 @@ import os
 # Load environment variables
 load_dotenv()
 
-app = FastAPI(title="Motorsport P1 F1 Data API", version="1.0.0")
+app = FastAPI(
+    title="Motorsport P1 — F1 Data API",
+    description="REST API serving historical F1 data from Supabase (F1DB 1950–2025).",
+    version="1.0.0",
+)
 
 # CORS configuration
 origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -19,12 +23,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def read_root():
-    return {"status": "ok", "message": "Motorsport P1 API is running"}
 
-# TODO: Add routers here
-# app.include_router(f1_router, prefix="/api/v1/f1")
+# ── Health check ──────────────────────────────────────────────
+@app.get("/", tags=["Health"])
+def read_root():
+    return {"status": "ok", "message": "Motorsport P1 API is running 🏎️"}
+
+
+# ── API v1 routers ───────────────────────────────────────────
+from app.api.v1.router import v1_router  # noqa: E402
+from fastapi.staticfiles import StaticFiles
+
+app.include_router(v1_router, prefix="/api/v1")
+
+# ── Static Media ──────────────────────────────────────────────
+# Serve local media folder at /media
+if os.path.exists("media"):
+    app.mount("/media", StaticFiles(directory="media"), name="media")
+
 
 if __name__ == "__main__":
     import uvicorn

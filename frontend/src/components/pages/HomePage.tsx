@@ -5,6 +5,8 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import Link from "next/link";
 import { getCountryFlagUrl, getMediaUrl, getTeamLogoUrl } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { fetchNextRace, fetchLastRacePodium, getConstructorColor } from "@/lib/supabase-queries";
 
 /* ── Shorthand color helpers ── */
 const C = {
@@ -18,12 +20,7 @@ const C = {
     border: "var(--surface-lighter)",
 };
 
-import { createClient } from "@supabase/supabase-js";
-
-// Initialize Supabase Client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Supabase client imported from @/lib/supabase
 
 const TEAM_VISUALS: Record<string, { color: string; logoUrl: string }> = {
     ferrari: { color: "#ff2800", logoUrl: "/ferrari-logo.png" },
@@ -52,16 +49,14 @@ const BARS = [
     { h: 30, color: "#334155" },
 ];
 
-const PODIUM_ORDER = [
-    { id: "lando-norris", name: "Lando Norris", team: "McLaren", teamColor: "#ff9317ff", pos: 2, time: "+0.725s" },
-    { id: "max-verstappen", name: "Max Verstappen", team: "Red Bull", teamColor: "#0600ef", pos: 1, time: "1:25:25.252" },
-    { id: "charles-leclerc", name: "Charles Leclerc", team: "Ferrari", teamColor: "#ca0000ff", pos: 3, time: "+7.916s" },
-];
+// Podium is now fetched dynamically from Supabase
 
 /* ============================================================ */
 
 type DriverStanding = { id: string; name: string; number: number; team: string; teamColor: string; points: number; wins: number; podiums: number; poles: number; };
 type ConstructorStanding = { id: string; name: string; color: string; points: number; };
+type PodiumDriver = { id: string; name: string; team: string; teamColor: string; pos: number; time: string; };
+type NextRaceInfo = { name: string; country: string; circuitName: string; circuitPlace: string; date: string; laps: number; length: number; fp1Date: string | null; fp1Time: string | null; fp2Date: string | null; fp2Time: string | null; fp3Date: string | null; fp3Time: string | null; qualDate: string | null; qualTime: string | null; raceDate: string | null; raceTime: string | null; year: number; round: number; };
 
 export default function HomePage() {
     /* States */
@@ -69,65 +64,103 @@ export default function HomePage() {
     const [sessionCd, setSessionCd] = useState("00:00:00");
     const [drivers, setDrivers] = useState<DriverStanding[]>([]);
     const [constructors, setConstructors] = useState<ConstructorStanding[]>([]);
+    const [podiumData, setPodiumData] = useState<{ race: any; podium: PodiumDriver[] } | null>(null);
+    const [nextRace, setNextRace] = useState<NextRaceInfo | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        async function fetchStandings() {
-            // Fetch Constructors 2025
-            const { data: cData } = await supabase.from('seasons_constructor_standings').select('constructorid, points').eq('year', 2025).order('points', { ascending: false }).limit(5);
-            if (cData) {
-                const cIds = cData.map(c => c.constructorid);
-                const { data: cNames } = await supabase.from('constructors').select('id, name').in('id', cIds);
-                const mappedC = cData.map(c => {
-                    const info = cNames?.find(x => x.id === c.constructorid);
-                    return {
-                        id: c.constructorid,
-                        name: info?.name || c.constructorid,
-                        color: TEAM_VISUALS[c.constructorid]?.color || '#fff',
-                        points: c.points || 0
-                    };
-                });
-                setConstructors(mappedC);
-            }
+        async function fetchAll() {
+            try {
+                // Fetch Constructors (latest year with data)
+                const { data: cData } = await supabase.from('seasons_constructor_standings').select('constructorid, points').eq('year', 2025).order('points', { ascending: false }).limit(5);
+                if (cData) {
+                    const cIds = cData.map(c => c.constructorid);
+                    const { data: cNames } = await supabase.from('constructors').select('id, name').in('id', cIds);
+                    setConstructors(cData.map(c => {
+                        const info = cNames?.find(x => x.id === c.constructorid);
+                        return { id: c.constructorid, name: info?.name || c.constructorid, color: getConstructorColor(c.constructorid), points: c.points || 0 };
+                    }));
+                }
 
-            // Fetch Drivers 2025
-            const { data: dData } = await supabase.from('seasons_driver_standings').select('driverid, points').eq('year', 2025).order('points', { ascending: false }).limit(10);
-            if (dData) {
-                const dIds = dData.map(d => d.driverid);
-                const { data: dNames } = await supabase.from('drivers').select('id, name, permanentnumber').in('id', dIds);
-                const { data: entrants } = await supabase.from('seasons_entrants_drivers').select('driverid, constructorid').eq('year', 2025).in('driverid', dIds);
+                // Fetch Drivers
+                const { data: dData } = await supabase.from('seasons_driver_standings').select('driverid, points').eq('year', 2025).order('points', { ascending: false }).limit(10);
+                if (dData) {
+                    const dIds = dData.map(d => d.driverid);
+                    const { data: dNames } = await supabase.from('drivers').select('id, name, permanentnumber').in('id', dIds);
+                    const { data: entrants } = await supabase.from('seasons_entrants_drivers').select('driverid, constructorid').eq('year', 2025).in('driverid', dIds);
+                    setDrivers(dData.map(d => {
+                        const info = dNames?.find(x => x.id === d.driverid);
+                        const entrant = entrants?.find(x => x.driverid === d.driverid);
+                        const teamId = entrant?.constructorid || 'unknown';
+                        return { id: d.driverid, name: info?.name || d.driverid, number: parseInt(info?.permanentnumber) || 0, team: String(teamId).replace(/-/g, ' '), teamColor: getConstructorColor(teamId), points: d.points || 0, wins: 0, podiums: 0, poles: 0 };
+                    }));
+                }
 
-                const mappedD = dData.map(d => {
-                    const info = dNames?.find(x => x.id === d.driverid);
-                    const entrant = entrants?.find(x => x.driverid === d.driverid);
-                    const teamId = entrant?.constructorid || 'unknown';
-                    return {
-                        id: d.driverid,
-                        name: info?.name || d.driverid,
-                        number: parseInt(info?.permanentnumber) || 0,
-                        team: String(teamId).replace('-', ' '),
-                        teamColor: TEAM_VISUALS[teamId]?.color || '#fff',
-                        points: d.points || 0,
-                        wins: 0, podiums: 0, poles: 0
-                    };
-                });
-                setDrivers(mappedD);
+                // Fetch Next Race dynamically
+                const raceData = await fetchNextRace();
+                if (raceData) {
+                    setNextRace({
+                        name: raceData.grands_prix?.fullname || raceData.officialname || 'Próxima Corrida',
+                        country: raceData.grands_prix?.countryid || '',
+                        circuitName: raceData.circuits?.fullname || raceData.circuits?.name || '',
+                        circuitPlace: raceData.circuits?.placename || '',
+                        date: raceData.date,
+                        laps: raceData.laps || raceData.scheduledlaps || 0,
+                        length: raceData.courselength || raceData.circuits?.length || 0,
+                        fp1Date: raceData.freepractice1date, fp1Time: raceData.freepractice1time,
+                        fp2Date: raceData.freepractice2date, fp2Time: raceData.freepractice2time,
+                        fp3Date: raceData.freepractice3date, fp3Time: raceData.freepractice3time,
+                        qualDate: raceData.qualifyingdate, qualTime: raceData.qualifyingtime,
+                        raceDate: raceData.date, raceTime: raceData.time,
+                        year: raceData.year, round: raceData.round,
+                    });
+                }
+
+                // Fetch Last Race Podium
+                const podResult = await fetchLastRacePodium();
+                if (podResult && podResult.podium.length > 0) {
+                    const podiumOrdered = [1, 0, 2].map(i => podResult.podium[i]).filter(Boolean);
+                    setPodiumData({
+                        race: podResult.race,
+                        podium: podiumOrdered.map(p => ({
+                            id: p.driverId,
+                            name: `${p.firstName} ${p.lastName}`,
+                            team: p.constructorId?.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || '',
+                            teamColor: p.teamColor,
+                            pos: p.position,
+                            time: p.position === 1 ? (p.time || '') : (p.gap ? `+${p.gap}` : ''),
+                        })),
+                    });
+                }
+            } catch (err) {
+                console.error('Error fetching home data:', err);
+            } finally {
+                setLoading(false);
             }
         }
-        fetchStandings();
+        fetchAll();
+    }, []);
 
-        // Data alvo: Grande Prêmio da Austrália 2026: 08 Mar 2026, 01:00 Horário de Brasília
-        const target = new Date("2026-03-08T01:00:00-03:00");
+    // Dynamic countdown based on nextRace
+    useEffect(() => {
+        if (!nextRace?.date) return;
+        const raceDate = nextRace.date;
+        const raceTime = nextRace.raceTime || '14:00:00';
+        const target = new Date(`${raceDate}T${raceTime}`);
 
         const tick = () => {
             const diff = target.getTime() - Date.now();
-            if (diff <= 0) return;
+            if (diff <= 0) { setCd({ d: 0, h: 0, m: 0, s: 0 }); return; }
             setCd({
                 d: Math.floor(diff / 86400000),
                 h: Math.floor((diff % 86400000) / 3600000),
                 m: Math.floor((diff % 3600000) / 60000),
                 s: Math.floor((diff % 60000) / 1000),
             });
-            const sDiff = diff - 7200000;
+            // Next session countdown (FP1 if available)
+            const fp1Target = nextRace.fp1Date ? new Date(`${nextRace.fp1Date}T${nextRace.fp1Time || '10:00:00'}`) : null;
+            const nextSession = fp1Target && fp1Target.getTime() > Date.now() ? fp1Target : target;
+            const sDiff = nextSession.getTime() - Date.now();
             if (sDiff > 0) {
                 const hh = Math.floor(sDiff / 3600000);
                 const mm = Math.floor((sDiff % 3600000) / 60000);
@@ -138,7 +171,7 @@ export default function HomePage() {
         tick();
         const id = setInterval(tick, 1000);
         return () => clearInterval(id);
-    }, []);
+    }, [nextRace]);
 
     /* Driver Modal */
     const [modal, setModal] = useState<DriverStanding | null>(null);
@@ -170,14 +203,16 @@ export default function HomePage() {
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-3 mb-2">
-                                            <div className="w-10 h-7 rounded overflow-hidden shadow-md border border-slate-700">
-                                                <img src={getCountryFlagUrl("australia")} alt="Australia Flag" className="w-full h-full object-cover" />
-                                            </div>
-                                            <h2 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">Grande Prêmio da Austrália</h2>
+                                            {nextRace?.country && (
+                                                <div className="w-10 h-7 rounded overflow-hidden shadow-md border border-slate-700">
+                                                    <img src={getCountryFlagUrl(nextRace.country)} alt={`${nextRace.country} Flag`} className="w-full h-full object-cover" />
+                                                </div>
+                                            )}
+                                            <h2 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">{nextRace?.name || 'Próxima Corrida'}</h2>
                                         </div>
                                         <p className="text-lg flex items-center gap-2" style={{ color: C.muted }}>
                                             <span className="material-symbols-outlined text-sm">location_on</span>
-                                            Circuito de Albert Park, Melbourne
+                                            {nextRace?.circuitName || 'Circuito'}{nextRace?.circuitPlace ? `, ${nextRace.circuitPlace}` : ''}
                                         </p>
                                     </div>
                                     {/* Countdown */}
@@ -195,7 +230,7 @@ export default function HomePage() {
                                         ))}
                                     </div>
                                     <div className="mt-4 flex gap-3">
-                                        <Link href="/race/2026/1" className="flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold uppercase tracking-wide text-sm transition-colors" style={{ background: C.primary }}>
+                                        <Link href={`/race/${nextRace?.year || 2026}/${nextRace?.round || 1}`} className="flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold uppercase tracking-wide text-sm transition-colors" style={{ background: C.primary }}>
                                             Race Hub <span className="material-symbols-outlined text-sm">arrow_forward</span>
                                         </Link>
                                         <button className="text-white px-6 py-3 rounded-lg font-bold uppercase tracking-wide text-sm transition-colors" style={{ background: C.lighter, border: "1px solid #475569" }}>
@@ -209,8 +244,8 @@ export default function HomePage() {
                                         <path d="M40,150 C40,150 20,130 30,110 C40,90 60,100 70,80 C80,60 60,40 90,30 C120,20 150,40 160,70 C170,100 150,120 140,140 C130,160 100,170 80,160 C60,150 40,150 40,150 Z" />
                                     </svg>
                                     <div className="absolute bottom-0 right-0 p-2 rounded text-xs" style={{ background: "rgba(35,36,41,0.9)", color: C.muted }}>
-                                        <div>Extensão: <span className="text-white font-mono">5.278 km</span></div>
-                                        <div>Voltas: <span className="text-white font-mono">58</span></div>
+                                        <div>Extensão: <span className="text-white font-mono">{nextRace?.length ? `${nextRace.length.toFixed(3)} km` : '—'}</span></div>
+                                        <div>Voltas: <span className="text-white font-mono">{nextRace?.laps || '—'}</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -226,35 +261,38 @@ export default function HomePage() {
                                 <span className="text-xs" style={{ color: C.muted }}>Horários de Brasília</span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {/* Quinta/Sexta */}
+                                {/* Práticas */}
                                 <div className="rounded-lg p-4" style={{ background: "rgba(46,48,54,0.5)", border: `1px solid ${C.border}` }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>Quinta e Sexta</div>
+                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>Treinos Livres</div>
                                     <div className="space-y-3">
-                                        <ScheduleRow label="05 Mar • Treino Livre 1" time="22:30" />
-                                        <ScheduleRow label="06 Mar • Treino Livre 2" time="02:00" />
+                                        {nextRace?.fp1Date && <ScheduleRow label={`${fmtDate(nextRace.fp1Date)} • Treino Livre 1`} time={fmtTime(nextRace.fp1Time)} />}
+                                        {nextRace?.fp2Date && <ScheduleRow label={`${fmtDate(nextRace.fp2Date)} • Treino Livre 2`} time={fmtTime(nextRace.fp2Time)} />}
+                                        {nextRace?.fp3Date && <ScheduleRow label={`${fmtDate(nextRace.fp3Date)} • Treino Livre 3`} time={fmtTime(nextRace.fp3Time)} />}
+                                        {!nextRace?.fp1Date && !nextRace?.fp2Date && !nextRace?.fp3Date && <span className="text-xs" style={{ color: C.muted }}>Horários a confirmar</span>}
                                     </div>
                                 </div>
-                                {/* Sexta/Sábado */}
+                                {/* Qualifying */}
                                 <div className="rounded-lg p-4" style={{ background: "rgba(46,48,54,0.5)", border: `1px solid ${C.border}` }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>Sexta e Sábado</div>
+                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>Classificação</div>
                                     <div className="space-y-3">
-                                        <ScheduleRow label="06 Mar • Treino Livre 3" time="22:30" />
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-sm text-white font-bold">07 Mar • Qualifying</span>
-                                            <span className="text-xs font-mono px-2 py-1 rounded text-white" style={{ background: C.primary }}>02:00</span>
-                                        </div>
+                                        {nextRace?.qualDate ? (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-sm text-white font-bold">{fmtDate(nextRace.qualDate)} • Qualifying</span>
+                                                <span className="text-xs font-mono px-2 py-1 rounded text-white" style={{ background: C.primary }}>{fmtTime(nextRace.qualTime)}</span>
+                                            </div>
+                                        ) : <span className="text-xs" style={{ color: C.muted }}>Horário a confirmar</span>}
                                     </div>
                                 </div>
-                                {/* Sunday */}
+                                {/* Race */}
                                 <div className="rounded-lg p-4" style={{ background: "linear-gradient(to bottom right, rgba(236,19,30,0.2), rgba(236,19,30,0.05))", border: "1px solid rgba(236,19,30,0.3)" }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>🏁 Domingo (08 Mar)</div>
+                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>🏁 {nextRace?.raceDate ? fmtDate(nextRace.raceDate) : 'Corrida'}</div>
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
                                             <span className="text-sm text-white font-bold">Corrida Oficial</span>
-                                            <span className="text-xs font-mono px-2 py-1 rounded text-white" style={{ background: C.primary }}>01:00</span>
+                                            <span className="text-xs font-mono px-2 py-1 rounded text-white" style={{ background: C.primary }}>{nextRace?.raceTime ? fmtTime(nextRace.raceTime) : '—'}</span>
                                         </div>
                                         <div className="pt-2" style={{ borderTop: "1px solid #334155" }}>
-                                            <span className="text-xs" style={{ color: C.muted }}>58 voltas • 306.124 km</span>
+                                            <span className="text-xs" style={{ color: C.muted }}>{nextRace?.laps || '—'} voltas{nextRace?.length ? ` • ${(nextRace.length * (nextRace.laps || 1)).toFixed(1)} km` : ''}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -269,16 +307,19 @@ export default function HomePage() {
                                     <h3 className="text-lg font-bold text-white uppercase tracking-wide flex items-center gap-2">
                                         <span className="w-1 h-5 rounded-full" style={{ background: C.primary }} />
                                         Último Pódio
-                                        <span className="text-sm font-normal ml-2" style={{ color: C.dimmed }}>GP de Abu Dhabi 2025</span>
+                                        <span className="text-sm font-normal ml-2" style={{ color: C.dimmed }}>{podiumData?.race?.grands_prix?.name || podiumData?.race?.officialname || ''}</span>
                                     </h3>
-                                    <Link href="/session/2025/24/R" className="text-xs font-bold uppercase hover:text-white transition-colors flex items-center gap-1" style={{ color: C.primary }}>
-                                        Resultados Completos <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                                    </Link>
+                                    {podiumData?.race && (
+                                        <Link href={`/analysis/session/${podiumData.race.year}/${podiumData.race.round}/R`} className="text-xs font-bold uppercase hover:text-white transition-colors flex items-center gap-1" style={{ color: C.primary }}>
+                                            Resultados Completos <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                        </Link>
+                                    )}
                                 </div>
                                 <div className="flex flex-1 items-end justify-center gap-2 sm:gap-4 h-full pt-4">
-                                    {PODIUM_ORDER.map((d) => (
+                                    {(podiumData?.podium || []).map((d) => (
                                         <PodiumCard key={d.id} driver={d} onClick={() => openModal(d.id)} />
                                     ))}
+                                    {!podiumData && !loading && <span className="text-sm" style={{ color: C.muted }}>Carregando pódio...</span>}
                                 </div>
                             </div>
 
@@ -408,7 +449,7 @@ export default function HomePage() {
                             <p className="text-xs mb-4" style={{ color: C.muted }}>
                                 Verstappen levou <span className="text-white font-bold">5km/h</span> a mais de velocidade na Curva 12 comparado a Leclerc.
                             </p>
-                            <Link href="/compare" className="block w-full py-2 rounded-lg text-xs font-bold text-white uppercase tracking-wider text-center transition-all" style={{ background: C.surface, border: "1px solid #475569" }}>
+                            <Link href="/analysis/compare" className="block w-full py-2 rounded-lg text-xs font-bold text-white uppercase tracking-wider text-center transition-all" style={{ background: C.surface, border: "1px solid #475569" }}>
                                 Comparar Telemetria
                             </Link>
                         </div>
@@ -429,7 +470,7 @@ export default function HomePage() {
                                     <span className="text-xs font-mono" style={{ color: C.primary }}>{sessionCd}</span>
                                 </div>
                                 <div className="pt-3" style={{ borderTop: "1px solid #334155" }}>
-                                    <Link href="/live" className="w-full py-2 rounded-lg text-xs font-bold text-white uppercase tracking-wider transition-all flex items-center justify-center gap-2" style={{ background: C.primary }}>
+                                    <Link href="/analysis/live" className="w-full py-2 rounded-lg text-xs font-bold text-white uppercase tracking-wider transition-all flex items-center justify-center gap-2" style={{ background: C.primary }}>
                                         <span className="material-symbols-outlined text-sm">live_tv</span>
                                         Acessar Live Timing
                                     </Link>
@@ -497,7 +538,7 @@ export default function HomePage() {
                                 <Link href="/drivers" className="flex-1 py-3 rounded-lg text-white font-bold uppercase text-sm transition-colors text-center" style={{ background: C.primary }} onClick={() => setModal(null)}>
                                     Perfil Completo
                                 </Link>
-                                <Link href="/compare" className="flex-1 py-3 rounded-lg text-white font-bold uppercase text-sm transition-colors text-center" style={{ background: C.lighter, border: "1px solid #475569" }} onClick={() => setModal(null)}>
+                                <Link href="/analysis/compare" className="flex-1 py-3 rounded-lg text-white font-bold uppercase text-sm transition-colors text-center" style={{ background: C.lighter, border: "1px solid #475569" }} onClick={() => setModal(null)}>
                                     Comparar
                                 </Link>
                             </div>
@@ -512,6 +553,17 @@ export default function HomePage() {
 /* ── Helpers ── */
 const p = (n: number) => String(n).padStart(2, "0");
 
+function fmtDate(dateStr: string | null): string {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+}
+
+function fmtTime(timeStr: string | null): string {
+    if (!timeStr) return '—';
+    return timeStr.substring(0, 5); // "14:00"
+}
+
 function ScheduleRow({ label, time }: { label: string; time: string }) {
     return (
         <div className="flex justify-between items-center">
@@ -521,24 +573,33 @@ function ScheduleRow({ label, time }: { label: string; time: string }) {
     );
 }
 
-function PodiumCard({ driver, onClick }: { driver: (typeof PODIUM_ORDER)[0]; onClick: () => void }) {
+function PodiumCard({ driver, onClick }: { driver: PodiumDriver; onClick: () => void }) {
     const isW = driver.pos === 1;
     const avatarCls = isW ? "w-24 h-24 sm:w-28 sm:h-28" : "w-20 h-20 sm:w-24 sm:h-24";
     const pedestalH = isW ? "h-40" : driver.pos === 2 ? "h-32" : "h-28";
+    const [imgError, setImgError] = useState(false);
+
+    // Try 2025 first, fallback to 2026
+    const imgUrl = imgError
+        ? ''
+        : getMediaUrl('drivers', driver.id, '2025.webp');
 
     return (
         <div className={`podium-card flex flex-col items-center justify-end w-1/3 ${isW ? "z-20" : ""} cursor-pointer`} onClick={onClick}>
             <div className={`relative ${avatarCls} rounded-full overflow-hidden mb-[-10px] z-10 group-hover:scale-105 transition-transform`} style={{ border: `2px solid ${driver.teamColor}`, background: "#1e293b", boxShadow: isW ? "0 0 15px rgba(236,19,30,0.3)" : "none" }}>
-                <div
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                        backgroundImage: `url(${getMediaUrl('drivers', driver.id, '2025.webp')})`,
-                        backgroundSize: '90%',
-                        backgroundPosition: '60% 0%',
-                        backgroundRepeat: 'no-repeat',
-                    }}
-                />
-                <span className="material-symbols-outlined absolute inset-0 flex items-center justify-center" style={{ fontSize: isW ? 40 : 32, color: "#94a3b8", display: 'none' }}>person</span>
+                {imgUrl ? (
+                    <img
+                        src={imgUrl}
+                        alt={driver.name}
+                        className="absolute inset-0 w-full h-full object-cover object-top"
+                        style={{ objectPosition: '60% 0%' }}
+                        onError={() => setImgError(true)}
+                    />
+                ) : (
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: driver.teamColor + '30' }}>
+                        <span className="text-2xl font-black text-white">{driver.name.split(' ').map(n => n[0]).join('')}</span>
+                    </div>
+                )}
                 {isW && <div className="absolute bottom-0 inset-x-0 text-white text-[10px] font-bold text-center py-0.5 z-10" style={{ background: "var(--primary)" }}>VENCEDOR</div>}
             </div>
             <div className={`w-full pt-6 pb-3 px-2 rounded-t-lg flex flex-col items-center justify-between ${pedestalH} ${isW ? "shadow-lg" : ""}`} style={{ background: "var(--surface-lighter)", borderTop: `4px solid ${driver.teamColor}` }}>

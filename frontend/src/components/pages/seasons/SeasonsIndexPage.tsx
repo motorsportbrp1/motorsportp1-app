@@ -5,12 +5,12 @@ import { useState, useEffect } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getMediaUrl, getTeamLogoUrl } from "@/lib/utils";
+import { getMediaUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
 
 // Era definitions
 const ERAS = [
     { id: "all", label: "Todas as Eras", sublabel: "" },
-    { id: "ground-effect", label: "Efeito Solo", sublabel: "(2022-Presente)" },
+    { id: "ground-effect", label: "Efeito Solo", sublabel: "(2022-2025)" },
     { id: "hybrid", label: "Era Híbrida", sublabel: "(2014-2021)" },
     { id: "v8", label: "Era V8", sublabel: "(2006-2013)" },
     { id: "v10", label: "Era V10", sublabel: "(1996-2005)" },
@@ -27,16 +27,11 @@ function getEraForYear(year: number) {
 
 
 
-// ── Season card images (local assets) ──
-const SEASON_IMAGES: Record<number, string> = {
-    2025: "/images/seasons/2025-season-norris.jpg",
-    2024: "/images/seasons/2024-season-verstappen.jpg",
-};
-
 // ── Constructor visual config ──
-function getConstructorColor(id: string) {
+function getConstructorColorClass(id: string) {
     const map: Record<string, string> = {
         "mercedes": "bg-teal-800 border-teal-700 text-white",
+        "red-bull": "bg-blue-900 border-blue-800 text-yellow-400",
         "red_bull": "bg-blue-900 border-blue-800 text-yellow-400",
         "ferrari": "bg-red-600 border-red-500 text-white",
         "mclaren": "bg-orange-500 border-orange-400 text-black",
@@ -46,15 +41,19 @@ function getConstructorColor(id: string) {
         "benetton": "bg-green-600 border-green-500 text-white",
         "lotus": "bg-yellow-600 border-yellow-500 text-black",
         "tyrrell": "bg-blue-600 border-blue-500 text-white",
+        "brabham": "bg-emerald-700 border-emerald-600 text-white",
+        "alpine": "bg-pink-500 border-pink-400 text-white",
+        "aston-martin": "bg-emerald-800 border-emerald-700 text-white",
     };
     return map[id] || "bg-surface-lighter border-surface-lighter text-white";
 }
 
 function getConstructorAbbr(id: string, name: string) {
     const map: Record<string, string> = {
-        "mercedes": "ME", "red_bull": "RB", "ferrari": "FE", "mclaren": "MC",
+        "mercedes": "ME", "red-bull": "RB", "red_bull": "RB", "ferrari": "FE", "mclaren": "MC",
         "williams": "WI", "renault": "RE", "brawn": "BGP", "benetton": "BE",
-        "lotus": "LO", "tyrrell": "TY", "brabham": "BR",
+        "lotus": "LO", "tyrrell": "TY", "brabham": "BR", "alpine": "AL",
+        "aston-martin": "AM",
     };
     return map[id] || name.substring(0, 2).toUpperCase();
 }
@@ -69,107 +68,134 @@ export default function SeasonsIndexPage() {
     useEffect(() => {
         async function fetchSeasons() {
             try {
-                // 1. Fetch seasons
-                const { data: seasons, error: err1 } = await supabase.from('seasons').select('year').order('year', { ascending: false });
-                if (err1) console.error("Error fetching seasons:", err1);
-
-                // 2. Fetch driver champions
-                const { data: dChamps } = await supabase.from('driver_standings')
-                    .select('year, driverid, drivers(firstname, lastname)')
-                    .eq('championshipwon', true);
-
-                // 3. Fetch constructor champions
-                const { data: cChamps } = await supabase.from('constructor_standings')
-                    .select('year, constructorid, constructors(name)')
-                    .eq('championshipwon', true);
-
-                // 4. Fetch rounds count from races table
-                const { data: racesData } = await supabase.from('races').select('year, round').order('year', { ascending: false });
-
-                // 5. Fetch results to determine champion's team (constructor)
-                // We get year + driverid + constructorid from the results table
-                const { data: resultsBatch } = await supabase.from('results')
-                    .select('year, driverid, constructorid')
+                // 1. Fetch all seasons
+                const { data: seasons } = await supabase
+                    .from('seasons').select('year')
                     .order('year', { ascending: false });
 
-                // Build a map: year+driverid -> constructorid (the team they drove for that year)
-                const driverTeamByYear: Record<string, string> = {};
-                if (resultsBatch) {
-                    resultsBatch.forEach((r: any) => {
-                        const key = `${r.year}_${r.driverid}`;
-                        if (!driverTeamByYear[key]) {
-                            driverTeamByYear[key] = r.constructorid;
-                        }
-                    });
+                // 2. Fetch driver champions (pre-aggregated by season — no duplicates)
+                const { data: dChamps } = await supabase
+                    .from('seasons_driver_standings')
+                    .select('year, driverid')
+                    .eq('championshipwon', true);
+
+                // 3. Fetch constructor champions (pre-aggregated)
+                const { data: cChamps } = await supabase
+                    .from('seasons_constructor_standings')
+                    .select('year, constructorid')
+                    .eq('championshipwon', true);
+
+                // 4. Fetch rounds count from races table with pagination to bypass 1000 row limit
+                const racesData: any[] = [];
+                let page = 0;
+                while (true) {
+                    const { data } = await supabase.from('races').select('year, round').range(page * 1000, (page + 1) * 1000 - 1);
+                    if (!data || data.length === 0) break;
+                    racesData.push(...data);
+                    if (data.length < 1000) break;
+                    page++;
                 }
 
-                // Build constructor name lookup
+                // Extract unique IDs required for names and team mapping
+                const champDriverIds = Array.from(new Set(dChamps?.map(d => d.driverid) || []));
+                const champConstructorIds = Array.from(new Set(cChamps?.map(c => c.constructorid) || []));
+
+                // 5. Fetch champion team mapping only for the champion drivers
+                const entrantsData: any[] = [];
+                if (champDriverIds.length > 0) {
+                    // split into chunks of 100 to avoid URL length limits on the IN clause just in case
+                    for (let i = 0; i < champDriverIds.length; i += 100) {
+                        const chunk = champDriverIds.slice(i, i + 100);
+                        const { data } = await supabase.from('seasons_entrants_drivers')
+                            .select('year, driverid, constructorid')
+                            .in('driverid', chunk);
+                        if (data) entrantsData.push(...data);
+                    }
+                }
+
+                // 6. Fetch champion drivers names
+                const allDrivers: any[] = [];
+                if (champDriverIds.length > 0) {
+                    for (let i = 0; i < champDriverIds.length; i += 100) {
+                        const chunk = champDriverIds.slice(i, i + 100);
+                        const { data } = await supabase.from('drivers').select('id, firstname, lastname').in('id', chunk);
+                        if (data) allDrivers.push(...data);
+                    }
+                }
+
+                // 7. Fetch all constructors needed for names
+                const allTeamIds = Array.from(new Set([...champConstructorIds, ...entrantsData.map(e => e.constructorid)]));
+                const allConstructors: any[] = [];
+                if (allTeamIds.length > 0) {
+                    for (let i = 0; i < allTeamIds.length; i += 100) {
+                        const chunk = allTeamIds.slice(i, i + 100);
+                        const { data } = await supabase.from('constructors').select('id, name').in('id', chunk);
+                        if (data) allConstructors.push(...data);
+                    }
+                }
+
+                // Build lookup maps
+                const driverNameMap: Record<string, { firstname: string; lastname: string }> = {};
+                allDrivers.forEach((d: any) => { driverNameMap[d.id] = d; });
+
                 const constructorNameMap: Record<string, string> = {};
+                allConstructors.forEach((c: any) => { constructorNameMap[c.id] = c.name; });
 
-                // Fetch all constructors to guarantee team name mapping even if they didn't win Constructors' Champ
-                const { data: allConstructors } = await supabase.from('constructors').select('*');
-                if (allConstructors) {
-                    allConstructors.forEach((c: any) => {
-                        const id = c.constructorid || c.id;
-                        if (id && c.name) {
-                            constructorNameMap[id] = c.name;
-                        }
-                    });
-                }
+                const driverTeamByYear: Record<string, string> = {};
+                entrantsData.forEach((e: any) => {
+                    const key = `${e.year}_${e.driverid}`;
+                    if (!driverTeamByYear[key]) driverTeamByYear[key] = e.constructorid;
+                });
 
-                // Rounds per year — count distinct rounds from races table
+                // Rounds per year
                 const roundsPerYear: Record<number, number> = {};
-                if (racesData) {
-                    const seenRounds = new Set<string>();
-                    racesData.forEach((r: any) => {
-                        const key = `${r.year}_${r.round}`;
-                        if (!seenRounds.has(key)) {
-                            seenRounds.add(key);
-                            roundsPerYear[r.year] = (roundsPerYear[r.year] || 0) + 1;
-                        }
-                    });
-                }
+                const seenRounds = new Set<string>();
+                (racesData || []).forEach((r: any) => {
+                    const key = `${r.year}_${r.round}`;
+                    if (!seenRounds.has(key)) {
+                        seenRounds.add(key);
+                        roundsPerYear[r.year] = (roundsPerYear[r.year] || 0) + 1;
+                    }
+                });
 
                 // Driver champion by year (deduplicated)
                 const driverChampionByYear: Record<number, any> = {};
-                const driverCounts: Record<string, { name: string, val: number, id: string }> = {};
-                if (dChamps) {
-                    dChamps.forEach((dc: any) => {
+                const driverCounts: Record<string, { name: string; val: number; id: string }> = {};
+                (dChamps || []).forEach((dc: any) => {
+                    if (!driverChampionByYear[dc.year]) {
+                        driverChampionByYear[dc.year] = dc;
                         const id = dc.driverid;
-                        if (!driverChampionByYear[dc.year]) {
-                            driverChampionByYear[dc.year] = dc;
-                            if (!driverCounts[id]) {
-                                driverCounts[id] = {
-                                    name: dc.drivers ? `${dc.drivers.firstname[0]}. ${dc.drivers.lastname}` : id,
-                                    val: 0,
-                                    id: id,
-                                };
-                            }
-                            driverCounts[id].val += 1;
+                        if (!driverCounts[id]) {
+                            const d = driverNameMap[id];
+                            driverCounts[id] = {
+                                name: d ? `${d.firstname[0]}. ${d.lastname}` : id,
+                                val: 0,
+                                id: id,
+                            };
                         }
-                    });
-                }
+                        driverCounts[id].val += 1;
+                    }
+                });
 
                 // Constructor champion by year (deduplicated)
-                const constructorCounts: Record<string, { name: string, abbr: string, val: number, id: string }> = {};
                 const constructorChampionByYear: Record<number, any> = {};
-                if (cChamps) {
-                    cChamps.forEach((cc: any) => {
+                const constructorCounts: Record<string, { name: string; abbr: string; val: number; id: string }> = {};
+                (cChamps || []).forEach((cc: any) => {
+                    if (!constructorChampionByYear[cc.year]) {
+                        constructorChampionByYear[cc.year] = cc;
                         const id = cc.constructorid;
-                        if (!constructorChampionByYear[cc.year]) {
-                            constructorChampionByYear[cc.year] = cc;
-                            if (!constructorCounts[id]) {
-                                constructorCounts[id] = {
-                                    name: cc.constructors ? cc.constructors.name : id,
-                                    abbr: getConstructorAbbr(id, cc.constructors ? cc.constructors.name : id),
-                                    val: 0,
-                                    id: id
-                                };
-                            }
-                            constructorCounts[id].val += 1;
+                        const name = constructorNameMap[id] || id;
+                        if (!constructorCounts[id]) {
+                            constructorCounts[id] = {
+                                name,
+                                abbr: getConstructorAbbr(id, name),
+                                val: 0,
+                                id: id,
+                            };
                         }
-                    });
-                }
+                        constructorCounts[id].val += 1;
+                    }
+                });
 
                 // Build final seasons data
                 if (seasons) {
@@ -187,19 +213,25 @@ export default function SeasonsIndexPage() {
                             championTeam = constructorNameMap[championTeamId] || championTeamId;
                         }
 
+                        // Champion full name & image
+                        const driverInfo = dChamp ? driverNameMap[dChamp.driverid] : null;
+                        const championName = driverInfo ? `${driverInfo.firstname} ${driverInfo.lastname}` : "N/A";
+                        // Use the champion year for the image (with fallback to generic)
+                        const championImage = dChamp ? getDriverImageUrl(dChamp.driverid, y) : "";
+
                         return {
                             year: y,
                             rounds: roundsPerYear[y] || 0,
-                            champion: dChamp && dChamp.drivers ? `${dChamp.drivers.firstname} ${dChamp.drivers.lastname}` : "N/A",
-                            championImage: dChamp ? getMediaUrl('drivers', dChamp.driverid, `2025.webp`) : "",
-                            championTeam: championTeam,
-                            championTeamId: championTeamId,
-                            championTeamColor: getConstructorColor(championTeamId),
+                            champion: championName,
+                            championDriverId: dChamp?.driverid || "",
+                            championImage,
+                            championTeam,
+                            championTeamId,
+                            championTeamColor: getConstructorColorClass(championTeamId),
                             championAbbr: getConstructorAbbr(championTeamId, championTeam),
-                            constructorsChampion: cChamp && cChamp.constructors ? cChamp.constructors.name : (y < 1958 ? "—" : "N/A"),
+                            constructorsChampion: cChamp ? (constructorNameMap[cChamp.constructorid] || cChamp.constructorid) : (y < 1958 ? "—" : "N/A"),
                             constructorsChampionId: cChamp ? cChamp.constructorid : "",
-                            image: SEASON_IMAGES[y] || "",
-                            era: getEraForYear(y)
+                            era: getEraForYear(y),
                         };
                     });
                     setSeasonsData(finalData);
@@ -207,7 +239,7 @@ export default function SeasonsIndexPage() {
                     // Top drivers for sidebar
                     const topD = Object.values(driverCounts).sort((a, b) => b.val - a.val).slice(0, 5);
                     const maxD = topD.length > 0 ? topD[0].val : 7;
-                    setTopDrivers(topD.map(d => ({ ...d, max: maxD, img: getMediaUrl('drivers', d.id, '2026.webp') })));
+                    setTopDrivers(topD.map(d => ({ ...d, max: maxD, img: getDriverImageUrl(d.id, 2026) })));
 
                     // Top constructors for sidebar
                     const topC = Object.values(constructorCounts).sort((a, b) => b.val - a.val).slice(0, 5);
@@ -216,7 +248,7 @@ export default function SeasonsIndexPage() {
                         ...c,
                         max: maxC,
                         logo: getTeamLogoUrl(c.id),
-                        badgeColor: getConstructorColor(c.id),
+                        badgeColor: getConstructorColorClass(c.id),
                         barColor: "bg-white/30"
                     })));
                 }
@@ -295,23 +327,19 @@ export default function SeasonsIndexPage() {
                                         {season.year}
                                     </div>
 
-                                    {/* Image area */}
+                                    {/* Image area — gradient fallback with year */}
                                     <div className="h-48 w-full relative bg-gradient-to-b from-slate-800 to-surface-dark overflow-hidden">
-                                        {season.image ? (
-                                            <img
-                                                src={season.image}
-                                                alt={`Temporada ${season.year}`}
-                                                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                                            />
-                                        ) : (
-                                            /* Fallback: team color gradient + year */
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1541348263662-e068662d82af?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60')" }}></div>
-                                                <span className="text-7xl font-bold text-white/10 tracking-tighter">{season.year}</span>
-                                            </div>
-                                        )}
+
+                                        {/* Background fallback (year text) */}
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1541348263662-e068662d82af?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60')" }}></div>
+                                            <span className="text-7xl font-bold text-white/10 tracking-tighter">{season.year}</span>
+                                        </div>
+
+                                        {/* Actual Champion Image Background - Removed pending specific season images */}
+
                                         {/* Gradient overlay for text readability */}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-surface-dark via-transparent to-transparent"></div>
+                                        <div className="absolute inset-0 bg-gradient-to-t from-surface-dark via-transparent to-transparent z-10"></div>
                                     </div>
 
                                     {/* Card Content */}
@@ -335,7 +363,7 @@ export default function SeasonsIndexPage() {
                                                 {/* Team logo badge */}
                                                 {season.championTeamId && season.championTeamId !== "unknown" ? (
                                                     <div className="size-6 rounded-full overflow-hidden bg-white/10 flex items-center justify-center border border-white/10 shrink-0">
-                                                        <img src={getTeamLogoUrl(season.championTeamId)} alt={season.championTeam} className="w-full h-full object-contain p-0.5 scale-[1.2]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                                        <img src={getTeamLogoUrl(season.championTeamId, season.year)} alt={season.championTeam} className="w-full h-full object-contain p-0.5 scale-[1.2]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
                                                         <span className={`hidden size-6 rounded-full flex flex-col items-center justify-center text-[10px] font-bold border ${season.championTeamColor}`}>
                                                             {season.championAbbr}
                                                         </span>
@@ -357,7 +385,7 @@ export default function SeasonsIndexPage() {
                                                 <span className="text-white text-sm font-bold text-right">{season.constructorsChampion}</span>
                                                 {season.constructorsChampionId && (
                                                     <div className="size-10 rounded-md overflow-hidden bg-white/10 flex items-center justify-center shrink-0 border border-white/5">
-                                                        <img src={getTeamLogoUrl(season.constructorsChampionId)} alt="" className="w-full h-full object-contain p-1.5 drop-shadow-sm scale-[1.4]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                        <img src={getTeamLogoUrl(season.constructorsChampionId, season.year)} alt="" className="w-full h-full object-contain p-1.5 drop-shadow-sm scale-[1.4]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                                     </div>
                                                 )}
                                             </div>

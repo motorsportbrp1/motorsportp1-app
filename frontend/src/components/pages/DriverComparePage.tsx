@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ReactECharts from "echarts-for-react";
-import { ArrowLeftRight, Zap, BarChart2 } from "lucide-react";
+import { ArrowLeftRight, Zap, BarChart2, AlertCircle } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import {
@@ -11,74 +11,118 @@ import {
     mockDelta,
     mockCornerDeltas,
 } from "@/lib/mock-data/telemetry";
-import { mockDriverResults } from "@/lib/mock-data/session";
 import { formatDelta } from "@/types";
+import { fetchSeasonDrivers } from "@/lib/supabase-queries";
+import { useDataFetch } from "@/hooks/useDataFetch";
+import { f1Service } from "@/services/f1Service";
 
-const DRIVERS = mockDriverResults.slice(0, 6);
+type DriverOption = { driverId: string; abbreviation: string; fullName: string; firstName: string; lastName: string; constructorId: string; teamColor: string; driverNumber: number; };
 
 export default function DriverComparePage() {
-    const [driver1, setDriver1] = useState("VER");
-    const [driver2, setDriver2] = useState("NOR");
+    const [drivers, setDrivers] = useState<DriverOption[]>([]);
+    const [driver1, setDriver1] = useState("");
+    const [driver2, setDriver2] = useState("");
     const [activeTab, setActiveTab] = useState<"speed" | "delta" | "corners">("speed");
+    const [loadingDrivers, setLoadingDrivers] = useState(true);
 
+    // Fetch real drivers from the latest season
+    useEffect(() => {
+        async function loadDrivers() {
+            try {
+                const data = await fetchSeasonDrivers(2025);
+                if (data.length > 0) {
+                    setDrivers(data);
+                    setDriver1(data[0]?.abbreviation || "");
+                    setDriver2(data[1]?.abbreviation || "");
+                }
+            } catch (err) {
+                console.error("Error loading drivers:", err);
+            } finally {
+                setLoadingDrivers(false);
+            }
+        }
+        loadDrivers();
+    }, []);
+
+    const DRIVERS = drivers;
     const d1Info = DRIVERS.find((d) => d.abbreviation === driver1);
     const d2Info = DRIVERS.find((d) => d.abbreviation === driver2);
 
+    // Fetch real telemetry via background worker
+    const { data: telemetryData, isLoading: loadingTelemetry, error: telemetryError } = useDataFetch(
+        async () => {
+            if (!driver1 || !driver2) return null;
+            // Defaults to 2024 round 21 (Vegas) for guaranteed FastF1 data during testing
+            return f1Service.getCompareTelemetry(2024, 21, "R", driver1, driver2);
+        },
+        [driver1, driver2],
+        !driver1 || !driver2
+    );
+
     // === SPEED TRACE OVERLAY ===
-    const speedOption = useMemo(() => ({
-        backgroundColor: "transparent",
-        tooltip: {
-            trigger: "axis",
-            backgroundColor: "#1a1a24",
-            borderColor: "#2a2a38",
-            textStyle: { color: "#f0f0f5", fontSize: 12 },
-        },
-        legend: { top: 0, textStyle: { color: "#a0a0b0", fontSize: 12 } },
-        grid: { left: 55, right: 20, top: 40, bottom: 50 },
-        xAxis: {
-            name: "Distance (m)",
-            nameLocation: "center" as const,
-            nameGap: 32,
-            nameTextStyle: { color: "#6b6b80" },
-            data: mockTelemetryVER.map((s) => Math.round(s.distance)),
-            axisLine: { lineStyle: { color: "#2a2a38" } },
-            axisLabel: {
-                color: "#a0a0b0",
-                interval: 49,
-                formatter: (v: string) => `${(parseInt(v) / 1000).toFixed(1)}km`,
+    const speedOption = useMemo(() => {
+        const d1Data = (telemetryData as any)?.[driver1]?.telemetry;
+        const d2Data = (telemetryData as any)?.[driver2]?.telemetry;
+
+        const d1SpeedData = d1Data ? d1Data.Speed : mockTelemetryVER.map((s) => s.speed);
+        const d2SpeedData = d2Data ? d2Data.Speed : mockTelemetryNOR.map((s) => s.speed);
+        const distanceAxis = d1Data ? d1Data.Distance.map((d: number) => Math.round(d)) : mockTelemetryVER.map((s) => Math.round(s.distance));
+
+        return {
+            backgroundColor: "transparent",
+            tooltip: {
+                trigger: "axis",
+                backgroundColor: "#1a1a24",
+                borderColor: "#2a2a38",
+                textStyle: { color: "#f0f0f5", fontSize: 12 },
             },
-            splitLine: { show: false },
-        },
-        yAxis: {
-            name: "Speed (km/h)",
-            nameTextStyle: { color: "#6b6b80" },
-            axisLine: { lineStyle: { color: "#2a2a38" } },
-            axisLabel: { color: "#a0a0b0" },
-            splitLine: { lineStyle: { color: "#1e1e28" } },
-        },
-        series: [
-            {
-                name: driver1,
-                type: "line",
-                data: mockTelemetryVER.map((s) => s.speed),
-                smooth: true,
-                showSymbol: false,
-                lineStyle: { width: 2, color: d1Info?.teamColor || "#3671C6" },
-                itemStyle: { color: d1Info?.teamColor || "#3671C6" },
-                areaStyle: { opacity: 0.05, color: d1Info?.teamColor || "#3671C6" },
+            legend: { top: 0, textStyle: { color: "#a0a0b0", fontSize: 12 } },
+            grid: { left: 55, right: 20, top: 40, bottom: 50 },
+            xAxis: {
+                name: "Distance (m)",
+                nameLocation: "center",
+                nameGap: 32,
+                nameTextStyle: { color: "#6b6b80" },
+                data: distanceAxis,
+                axisLine: { lineStyle: { color: "#2a2a38" } },
+                axisLabel: {
+                    color: "#a0a0b0",
+                    interval: 49,
+                    formatter: (v: string) => `${(parseInt(v) / 1000).toFixed(1)}km`,
+                },
+                splitLine: { show: false },
             },
-            {
-                name: driver2,
-                type: "line",
-                data: mockTelemetryNOR.map((s) => s.speed),
-                smooth: true,
-                showSymbol: false,
-                lineStyle: { width: 2, color: d2Info?.teamColor || "#FF8000" },
-                itemStyle: { color: d2Info?.teamColor || "#FF8000" },
-                areaStyle: { opacity: 0.05, color: d2Info?.teamColor || "#FF8000" },
+            yAxis: {
+                name: "Speed (km/h)",
+                nameTextStyle: { color: "#6b6b80" },
+                axisLine: { lineStyle: { color: "#2a2a38" } },
+                axisLabel: { color: "#a0a0b0" },
+                splitLine: { lineStyle: { color: "#1e1e28" } },
             },
-        ],
-    }), [driver1, driver2, d1Info, d2Info]);
+            series: [
+                {
+                    name: driver1,
+                    type: "line",
+                    data: d1SpeedData,
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 2, color: d1Info?.teamColor || "#3671C6" },
+                    itemStyle: { color: d1Info?.teamColor || "#3671C6" },
+                    areaStyle: { opacity: 0.1, color: d1Info?.teamColor || "#3671C6" },
+                },
+                {
+                    name: driver2,
+                    type: "line",
+                    data: d2SpeedData,
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 2, color: d2Info?.teamColor || "#FF8000" },
+                    itemStyle: { color: d2Info?.teamColor || "#FF8000" },
+                    areaStyle: { opacity: 0.1, color: d2Info?.teamColor || "#FF8000" },
+                },
+            ],
+        };
+    }, [driver1, driver2, d1Info, d2Info, telemetryData]);
 
     // === DELTA CHART ===
     const deltaOption = useMemo(() => ({
@@ -166,6 +210,32 @@ export default function DriverComparePage() {
                     </p>
                 </div>
 
+                {/* Demo Data Banner */}
+                <div className="flex items-center gap-3 px-4 py-3 rounded-lg mb-6" style={{ backgroundColor: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+                    {loadingTelemetry ? (
+                        <>
+                            <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--accent-blue)' }}></div>
+                            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>Loading Live Data</span> — Polling backend Async Worker para FastF1 (Irá demorar a primeira vez).
+                            </p>
+                        </>
+                    ) : telemetryData ? (
+                        <>
+                            <Zap size={16} style={{ color: "var(--accent-blue)" }} />
+                            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>Live Data</span> — Exibindo telemetria autêntica calculada do FastF1.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <AlertCircle size={16} style={{ color: "var(--accent-blue)" }} />
+                            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>Demo Data</span> — Pilotos reais do Supabase. Gráficos de telemetria usam dados demonstrativos.
+                            </p>
+                        </>
+                    )}
+                </div>
+
                 {/* Driver Picker Dual */}
                 <div className="card p-5 mb-6">
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
@@ -236,15 +306,15 @@ export default function DriverComparePage() {
                     {/* Summary Stats */}
                     <div className="flex justify-center gap-8 mt-5">
                         {[
-                            { label: "Best Lap", v1: d1Info?.bestLapTime || "—", v2: d2Info?.bestLapTime || "—" },
+                            { label: "Driver 1", v1: d1Info?.fullName || driver1, v2: "", single: true, color: d1Info?.teamColor },
                             {
-                                label: "Delta",
+                                label: "Telemetry",
                                 v1: "",
-                                v2: formatDelta(
-                                    ((d1Info?.bestLapTimeMs || 0) - (d2Info?.bestLapTimeMs || 0)) / 1000
-                                ) + "s",
+                                v2: "Demo Data",
                                 single: true,
+                                color: "var(--accent-blue)",
                             },
+                            { label: "Driver 2", v1: "", v2: d2Info?.fullName || driver2, single: true, color: d2Info?.teamColor },
                         ].map((stat) => (
                             <div key={stat.label} className="text-center">
                                 <p
@@ -253,21 +323,9 @@ export default function DriverComparePage() {
                                 >
                                     {stat.label}
                                 </p>
-                                {stat.single ? (
-                                    <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
-                                        {stat.v2}
-                                    </p>
-                                ) : (
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-sm font-bold tabular-nums" style={{ color: d1Info?.teamColor }}>
-                                            {stat.v1}
-                                        </span>
-                                        <span style={{ color: "var(--text-tertiary)" }}>|</span>
-                                        <span className="text-sm font-bold tabular-nums" style={{ color: d2Info?.teamColor }}>
-                                            {stat.v2}
-                                        </span>
-                                    </div>
-                                )}
+                                <p className="text-sm font-bold" style={{ color: stat.color || "var(--text-primary)" }}>
+                                    {stat.v2 || stat.v1}
+                                </p>
                             </div>
                         ))}
                     </div>

@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getCountryFlagUrl } from "@/lib/utils";
+import { getCountryFlagUrl, getDriverImageUrl } from "@/lib/utils";
 
 /* ── Shorthand color helpers ── */
 const C = {
@@ -62,39 +62,15 @@ export default function DriversIndexPage() {
                 (activeData || []).map((s: any) => s.driverid)
             );
 
-            // Fetch first and last race year for each driver (paginated)
-            let careerMap: Record<string, { first: number; last: number }> = {};
-            let offset = 0;
-            const batchSize = 1000;
-            let hasMore = true;
+            // Fetch first and last race year for each driver (single query via SQL view)
+            const { data: careerData } = await supabase
+                .from('driver_career_spans')
+                .select('driverid, first_year, last_year');
 
-            while (hasMore) {
-                const { data: batch } = await supabase
-                    .from('results')
-                    .select('driverid, year')
-                    .range(offset, offset + batchSize - 1);
-
-                if (!batch || batch.length === 0) {
-                    hasMore = false;
-                    break;
-                }
-
-                batch.forEach((r: any) => {
-                    const existing = careerMap[r.driverid];
-                    if (!existing) {
-                        careerMap[r.driverid] = { first: r.year, last: r.year };
-                    } else {
-                        if (r.year < existing.first) existing.first = r.year;
-                        if (r.year > existing.last) existing.last = r.year;
-                    }
-                });
-
-                if (batch.length < batchSize) {
-                    hasMore = false;
-                } else {
-                    offset += batchSize;
-                }
-            }
+            const careerMap: Record<string, { first: number; last: number }> = {};
+            (careerData || []).forEach((r: any) => {
+                careerMap[r.driverid] = { first: r.first_year, last: r.last_year };
+            });
 
             // Enrich drivers with career + active data
             const enrichedDrivers = (data || []).map((d: any) => ({
@@ -112,27 +88,10 @@ export default function DriversIndexPage() {
         fetchDrivers();
     }, []);
 
-    const DRIVER_IMAGES: Record<string, string> = {
-        "franco-colapinto": "/images/drivers/2026alpinefracol01right.avif",
-        "pierre-gasly": "/images/drivers/2026alpinepiegas01right.avif",
-        "fernando-alonso": "/images/drivers/2026astonmartinferalo01right.avif",
-        "lance-stroll": "/images/drivers/2026astonmartinlanstr01right.avif",
-        "charles-leclerc": "/images/drivers/2026ferrarichalec01right.avif",
-        "lewis-hamilton": "/images/drivers/2026ferrarilewham01right.avif",
-        "lando-norris": "/images/drivers/2026mclarenlannor01right.avif",
-        "andrea-kimi-antonelli": "/images/drivers/2026mercedesandant01right.avif",
-        "max-verstappen": "/images/drivers/2026redbullracingmaxver01right.avif",
-        "alexander-albon": "/images/drivers/2026williamsalealb01right.avif",
-        "carlos-sainz": "/images/drivers/2026williamscarsai01right.avif",
-        "alain-prost": "/images/drivers/alain-prost.jpg",
-        "ayrton-senna": "/images/drivers/ayrtons-senna.avif",
-        "michael-schumacher": "/images/drivers/michael-schumacher.png"
-    };
-
     // Include the top 7 legends to cover Senna, Prost, Lauda along with the top 4
     const LEGENDS = drivers.filter(d => (d.totalchampionshipwins || 0) >= 3).sort((a, b) => b.totalracewins - a.totalracewins).slice(0, 7).map(d => ({
         ...d,
-        headshot_url: DRIVER_IMAGES[d.id] || d.headshot_url
+        headshot_url: getDriverImageUrl(d.id) || undefined
     }));
 
     const filteredDrivers = drivers.filter(d => {
@@ -157,7 +116,7 @@ export default function DriversIndexPage() {
         return matchesSearch && matchesStatus && matchesEra;
     }).map(d => ({
         ...d,
-        headshot_url: DRIVER_IMAGES[d.id] || d.headshot_url
+        headshot_url: getDriverImageUrl(d.id) || undefined
     }));
 
     const totalPages = Math.ceil(filteredDrivers.length / rowsPerPage);

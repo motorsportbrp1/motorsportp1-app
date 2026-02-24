@@ -5,14 +5,9 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getCountryFlagUrl, getMediaUrl, getTeamLogoUrl } from "@/lib/utils";
+import { getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
 
-// ── Season card images ──
-const SEASON_IMAGES: Record<number, string> = {
-    2025: "/images/seasons/2025-season-norris.jpg",
-    2024: "/images/seasons/2024-season-verstappen.jpg",
-    // fallback uses patterned background
-};
+
 
 
 
@@ -26,13 +21,12 @@ const TEAM_COLORS: Record<string, string> = {
     "williams": "#005AFF",
     "alpine": "#0093cc",
     "aston_martin": "#229971",
-    "aston-martin": "#229971",
     "haas": "#ffffff",
     "sauber": "#E20514",
     "rb": "#6692FF",
     "renault": "#ffd800",
     "brawn": "#b0d828",
-    "lotus": "#ffc906",
+    "lotus": "#bdff06ff",
     "benetton": "#00a86b",
 };
 
@@ -231,7 +225,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                     setDriverLeader({
                         name: leader.name,
                         team: leader.team,
-                        image: leaderDriverObj ? getMediaUrl('drivers', leaderDriverObj.id, `2025.webp`) : "",
+                        image: leaderDriverObj ? getDriverImageUrl(leaderDriverObj.id, yr) : "",
                     });
                 }
 
@@ -283,7 +277,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                     setPolesLeader({
                         name: poleDriverName ? poleDriverName.lastname : poleLeaderId[0],
                         count: poleLeaderId[1],
-                        image: getMediaUrl('drivers', poleLeaderId[0], `2025.webp`),
+                        image: getDriverImageUrl(poleLeaderId[0], yr),
                     });
                 }
 
@@ -294,7 +288,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                     setBiggestWinner({
                         name: winDriverName ? winDriverName.lastname : winLeaderId[0],
                         count: winLeaderId[1],
-                        image: getMediaUrl('drivers', winLeaderId[0], `2025.webp`),
+                        image: getDriverImageUrl(winLeaderId[0], yr),
                     });
                 }
 
@@ -349,9 +343,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                 <div
                                     className="absolute right-0 top-0 h-full w-1/2 opacity-30 bg-cover bg-center mask-image-gradient"
                                     style={{
-                                        backgroundImage: SEASON_IMAGES[parseInt(year)]
-                                            ? `url('${SEASON_IMAGES[parseInt(year)]}')`
-                                            : "url('https://www.transparenttextures.com/patterns/carbon-fibre.png')",
+                                        backgroundImage: "url('https://www.transparenttextures.com/patterns/carbon-fibre.png')",
                                     }}
                                 ></div>
                                 <div className="relative z-10">
@@ -376,7 +368,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                                     <div className="flex items-center gap-1.5 mt-1">
                                                         {driverLeader.team && (
                                                             <div className="size-4 rounded overflow-hidden shrink-0">
-                                                                <img src={getTeamLogoUrl(driverLeader.team)} alt="" className="w-full h-full object-contain filter" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                                <img src={getTeamLogoUrl(driverLeader.team, parseInt(year))} alt="" className="w-full h-full object-contain filter" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                                             </div>
                                                         )}
                                                         <p className="text-primary text-sm font-medium">{driverLeader.team}</p>
@@ -396,7 +388,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                             <div className="flex items-center gap-3">
                                                 <div className="size-14 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/5 shadow-sm">
                                                     {constructorLeader.id ? (
-                                                        <img src={getTeamLogoUrl(constructorLeader.id)} alt="" className="w-full h-full object-contain p-2 drop-shadow-sm filter scale-[1.0]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                        <img src={getTeamLogoUrl(constructorLeader.id, parseInt(year))} alt="" className="w-full h-full object-contain p-2 drop-shadow-sm filter scale-[1.0]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                                     ) : (
                                                         <span className="material-symbols-outlined text-white">sports_motorsports</span>
                                                     )}
@@ -531,7 +523,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                                                 <span className="text-sm text-white font-medium">{race.winner}</span>
                                                                 {race.winnerTeam && (
                                                                     <div className="size-4 rounded overflow-hidden">
-                                                                        <img src={getTeamLogoUrl(race.winnerTeam)} alt="" className="w-full h-full object-contain filter" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                                        <img src={getTeamLogoUrl(race.winnerTeam, parseInt(year))} alt="" className="w-full h-full object-contain filter" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                                                     </div>
                                                                 )}
                                                             </div>

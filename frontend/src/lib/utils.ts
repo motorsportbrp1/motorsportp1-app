@@ -102,10 +102,10 @@ export function getCountryFlagUrl(countryId: string | null | undefined): string 
 
     // Some local overrides the user prefers, plus standard ISO alpha-2 mapping for FlagCDN
     const flags: Record<string, string> = {
-        "italy": "/images/flags/it-2.svg",
-        "austria": "/images/flags/at-2.svg",
-        "united-states-of-america": "/images/flags/us-2.svg",
-        "spain": "/images/flags/es-2.svg",
+        "italy": "https://flagcdn.com/it.svg",
+        "austria": "https://flagcdn.com/at.svg",
+        "united-states-of-america": "https://flagcdn.com/us.svg",
+        "spain": "https://flagcdn.com/es.svg",
         "united-kingdom": "https://flagcdn.com/gb.svg",
         "germany": "https://flagcdn.com/de.svg",
         "france": "https://flagcdn.com/fr.svg",
@@ -171,11 +171,13 @@ export function stringToColor(str: string): string {
 /**
  * Get Team Logo URL from Supabase Storage
  */
-export function getTeamLogoUrl(constructorId: string): string {
+export function getTeamLogoUrl(constructorId: string, year?: number): string {
     if (!constructorId) return "";
 
+    const id = constructorId.toLowerCase();
+
     // Mapeamento dos nomes de arquivo exatos salvos no Supabase Storage
-    const logoFiles: Record<string, { folder: string, filename: string }> = {
+    const logoFiles: Record<string, { folder: string, filename: string } | ((y: number) => { folder: string, filename: string })> = {
         ferrari: { folder: 'ferrari', filename: 'logo-ferrari-f1-2021.png' },
         mclaren: { folder: 'mclaren', filename: 'logo-mclaren-f1-2021.png' },
         mercedes: { folder: 'mercedes', filename: 'logo.webp' },
@@ -186,17 +188,37 @@ export function getTeamLogoUrl(constructorId: string): string {
         alpine: { folder: 'alpine', filename: 'logo-alpine-f1-2021.png' },
         williams: { folder: 'williams', filename: 'logo-williams-f1-2026.png' },
         rb: { folder: 'racingbulls', filename: 'visa-rb-soymotor.2024.png' },
+        'racing-bulls': { folder: 'racingbulls', filename: 'visa-rb-soymotor.2024.png' },
         haas: { folder: 'haas', filename: 'logo.svg' },
-        sauber: { folder: 'audi', filename: 'logo-audi-f1-2026.png' },
+        'haas-f1-team': { folder: 'haas', filename: 'logo.svg' },
+        sauber: { folder: 'sauber', filename: 'logo.webp' },
+        'kick-sauber': { folder: 'sauber', filename: 'logo.webp' },
         audi: { folder: 'audi', filename: 'logo-audi-f1-2026.png' },
-        cadillac: { folder: 'cadillac', filename: 'logo-cadillac-f1-2026.png' }
+        cadillac: { folder: 'cadillac', filename: 'logo-cadillac-f1-2026.png' },
+        lotus: { folder: 'lotusf1team', filename: 'Lotus_F1_Team_logo.svg' },
+        team_lotus: { folder: 'lotusf1team', filename: 'Lotus_F1_Team_logo.svg' },
+        brabham: { folder: 'brabham', filename: 'logo-brabham.jfif' },
+        brawn: { folder: 'brawngp', filename: '2009.png' },
+        // Dynamic historical logo mappings based on year
+        renault: (y) => {
+            if (y === 2004) return { folder: 'renault', filename: '2004.png' };
+            if (y === 2005) return { folder: 'renault', filename: '2005.png' };
+            if (y === 2006) return { folder: 'renault', filename: '2006.png' };
+            if (y === 2007) return { folder: 'renault', filename: '2007.png' };
+            if (y === 2008) return { folder: 'renault', filename: '2008.png' };
+            return { folder: 'renault', filename: '2016.webp' };
+        }
     };
 
-    const id = constructorId.toLowerCase();
     const mapping = logoFiles[id];
 
     if (mapping) {
-        return getMediaUrl('teams', mapping.folder, mapping.filename);
+        if (typeof mapping === 'function') {
+            const result = mapping(year || new Date().getFullYear());
+            return getMediaUrl('teams', result.folder, result.filename);
+        } else {
+            return getMediaUrl('teams', mapping.folder, mapping.filename);
+        }
     }
 
     // Fallback generico
@@ -212,11 +234,48 @@ export function getCarImageUrl(constructorId: string, year: number | string): st
 }
 
 
+export function getDriverImageUrl(driverId: string, fallbackYear?: number): string {
+    if (!driverId) return "";
+
+    const normalizedId = driverId.toLowerCase().replace(/_/g, '-');
+    const year = fallbackYear || new Date().getFullYear();
+
+    // Specific logic for drivers with multiple known years
+    const specialAssets: Record<string, number[]> = {
+        "fernando-alonso": [2005, 2006, 2022, 2026],
+        "lewis-hamilton": [2022, 2025, 2026],
+        "max-verstappen": [2025, 2026],
+        "michael-schumacher": [2006, 2012],
+        "ayrton-senna": [1994],
+        "alain-prost": [1993]
+    };
+
+    let filename = "2026.webp"; // Default
+
+    if (specialAssets[normalizedId]) {
+        const availableYears = specialAssets[normalizedId];
+        // Find the closest year that is <= requested year
+        const bestYear = availableYears.reduce((prev, curr) => {
+            return (curr <= year) ? curr : prev;
+        }, availableYears[0]);
+
+        filename = `${bestYear}.webp`;
+
+        // Edge case for Alonso 2006 (it's a .png according to list_dir)
+        if (normalizedId === "fernando-alonso" && bestYear === 2006) filename = "2006.png";
+    } else {
+        // Generic fallback logic
+        filename = `${Math.min(year, 2026)}.webp`;
+    }
+
+    return getMediaUrl('drivers', normalizedId, filename);
+}
+
 /**
  * Get Supabase Storage URL for dynamic media
  */
-export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks', id: string, filename: string): string {
-    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
+export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'seasons-index-cards', id: string, filename: string): string {
+    const backendUrl = "http://localhost:8000"; // Local media server
 
     let normalizedId = id.toLowerCase();
 
@@ -225,8 +284,7 @@ export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks', id: s
     } else if (type === 'cars') {
         if (normalizedId === 'red_bull' || normalizedId === 'red-bull') normalizedId = 'redbull';
         else if (normalizedId === 'rb' || normalizedId === 'racing_bulls' || normalizedId === 'racing-bulls') normalizedId = 'racingbulls';
-        // 'aston_martin' keeps the underscore
     }
 
-    return `${baseUrl}/storage/v1/object/public/f1-media/${type}/${normalizedId}/${filename}`;
+    return `${backendUrl}/media/${type}/${normalizedId}/${filename}`;
 }

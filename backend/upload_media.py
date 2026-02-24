@@ -54,7 +54,7 @@ def upload_images():
                 except Exception as e:
                     # Se o erro for de arquivo já existente, ignoramos e não mostramos erro crítico
                     if "already exists" in str(e).lower() or "duplicado" in str(e).lower():
-                        print(f"⏩ {relative_path} já existe no banco. Pulando.")
+                        print(f"Skipping {relative_path} - ja existe no banco.")
                     else:
                         print(f"❌ Erro ao subir {relative_path}: {e}")
 

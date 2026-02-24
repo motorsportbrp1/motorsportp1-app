@@ -17,7 +17,7 @@ Currently, the project is in **Phase 1**, focusing on establishing a robust, mod
 - **Data Visualization**: [Apache ECharts](https://echarts.apache.org/) via `echarts-for-react`
 - **Icons**: [Lucide React](https://lucide.dev/)
 
-### Backend (Phase 2 - Upcoming)
+### Backend (Phase 2 - Active)
 - **Framework**: Python FastAPI
 - **Data Processing**: FastF1 library
 - **Caching**: Redis

@@ -9,7 +9,7 @@ const NAV_LINKS = [
     { href: "/drivers", label: "Pilotos" },
     { href: "/teams", label: "Equipes" },
     { href: "/analysis", label: "Análise" },
-    { href: "/live", label: "Live", isLive: true },
+    { href: "/analysis/live", label: "Live", isLive: true },
 ];
 
 export default function Header() {
