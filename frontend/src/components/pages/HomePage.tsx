@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import Link from "next/link";
-import { getCountryFlagUrl, getMediaUrl, getTeamLogoUrl } from "@/lib/utils";
+import { getCountryFlagUrl, getMediaUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { fetchNextRace, fetchLastRacePodium, getConstructorColor } from "@/lib/supabase-queries";
 
@@ -190,9 +190,28 @@ export default function HomePage() {
 
                         {/* ── HERO ── */}
                         <div className="rounded-2xl overflow-hidden relative shadow-lg group card-hover" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                            <div className="absolute inset-0 z-0">
-                                <div className="absolute inset-0 z-10" style={{ background: `linear-gradient(to right, ${C.bg}, ${C.bg}e6, transparent)` }} />
-                                <div className="w-full h-full opacity-40 group-hover:scale-105 transition-transform duration-700" style={{ background: C.lighter }} />
+                            <div className="absolute inset-0 z-0 bg-surface-dark bg-slate-900">
+                                <div className="absolute inset-0 z-10 bg-gradient-to-r from-[#121418] via-[#121418]e6 to-transparent" />
+                                <div className="absolute inset-0 z-10 bg-gradient-to-t from-[#121418] via-transparent to-transparent" />
+                                {/* 
+                                   AQUI VOCÊ MODIFICA O EFEITO DA IMAGEM DE FUNDO DO HERO 
+                                   - opacity-40: Controla a visibilidade da imagem (0 a 100).
+                                   - mix-blend-luminosity: Remove as cores da imagem (deixa P/B) e mistura a luz com o fundo escuro.
+                                     (Tente trocar para 'mix-blend-screen' ou 'mix-blend-overlay' para efeitos diferentes).
+                                   - group-hover:scale-105: Faz a imagem aumentar lentamente de tamanho quando passa o mouse.
+                                */}
+                                {nextRace ? (
+                                    <img
+                                        src={getMediaUrl('homepage', '', `${nextRace.country.toLowerCase().replace(/\s+/g, '-')}-gp-raceweekend.jpeg`)}
+                                        className="w-full h-full object-cover opacity-40 mix-blend-screen group-hover:scale-105 transition-transform duration-700"
+                                        alt={nextRace.name}
+                                        onError={(e) => {
+                                            e.currentTarget.src = "https://images.unsplash.com/photo-1541348263662-e068662d82af?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80";
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="w-full h-full opacity-40 group-hover:scale-105 transition-transform duration-700" style={{ background: C.lighter }} />
+                                )}
                             </div>
                             <div className="relative z-20 p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-8 min-h-[320px]">
                                 <div className="flex flex-col gap-4 max-w-lg">
@@ -238,11 +257,25 @@ export default function HomePage() {
                                         </button>
                                     </div>
                                 </div>
-                                {/* Circuit SVG */}
+                                {/* Circuit SVG / Layout */}
                                 <div className="relative w-full md:w-1/3 h-64 flex items-center justify-center">
-                                    <svg className="w-full h-full text-white stroke-current fill-none stroke-2" style={{ filter: "drop-shadow(0 0 15px rgba(255,255,255,0.3))" }} viewBox="0 0 200 200">
-                                        <path d="M40,150 C40,150 20,130 30,110 C40,90 60,100 70,80 C80,60 60,40 90,30 C120,20 150,40 160,70 C170,100 150,120 140,140 C130,160 100,170 80,160 C60,150 40,150 40,150 Z" />
-                                    </svg>
+                                    {nextRace?.country ? (
+                                        <img
+                                            src={getMediaUrl('circuit-layouts', '', `${nextRace.year}-${nextRace.country.toLowerCase().replace(/\s+/g, '-')}.webp`)}
+                                            className="w-[80%] max-h-[80%] object-contain filter brightness-0 invert opacity-80"
+                                            style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.2))" }}
+                                            alt={`Layout do Circuito - ${nextRace.country}`}
+                                            onError={(e) => {
+                                                // If layout PNG is missing, fallback to generic track icon
+                                                e.currentTarget.style.display = 'none';
+                                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                            }}
+                                        />
+                                    ) : null}
+                                    <div className="hidden text-white/20 flex-col items-center gap-2">
+                                        <span className="material-symbols-outlined text-6xl">conversion_path</span>
+                                        <span className="text-xs tracking-widest uppercase">Layout Pendente</span>
+                                    </div>
                                     <div className="absolute bottom-0 right-0 p-2 rounded text-xs" style={{ background: "rgba(35,36,41,0.9)", color: C.muted }}>
                                         <div>Extensão: <span className="text-white font-mono">{nextRace?.length ? `${nextRace.length.toFixed(3)} km` : '—'}</span></div>
                                         <div>Voltas: <span className="text-white font-mono">{nextRace?.laps || '—'}</span></div>
@@ -389,16 +422,18 @@ export default function HomePage() {
                                     <div
                                         key={d.id}
                                         className="standing-row flex items-center p-3 cursor-pointer"
-                                        style={{ borderLeft: `3px solid ${i === 0 ? C.primary : d.teamColor}` }}
+                                        style={{ borderLeft: `3px solid ${d.teamColor}` }}
                                         onClick={() => openModal(d.id)}
                                     >
-                                        <span className="text-lg font-bold w-6 text-center" style={{ color: i === 0 ? C.primary : C.dimmed }}>{i + 1}</span>
+                                        <span className="text-lg font-bold w-6 text-center flex items-center justify-center" style={{ color: i === 0 ? "#eab308" : C.dimmed }}>
+                                            {i === 0 ? <span className="material-symbols-outlined" style={{ fontSize: "1.2rem", color: "#eab308" }}>workspace_premium</span> : i + 1}
+                                        </span>
                                         <div className="flex-1 px-3">
                                             <div className="text-sm font-bold text-white uppercase">{d.name}</div>
                                             <div className="text-[10px] uppercase" style={{ color: C.muted }}>{d.team}</div>
                                         </div>
                                         <div className="text-right">
-                                            <div className="text-sm font-bold" style={{ color: i === 0 ? C.primary : "#fff" }}>{d.points}</div>
+                                            <div className="text-sm font-bold w-12 text-right" style={{ color: "#fff" }}>{d.points}</div>
                                             <div className="text-[10px]" style={{ color: C.dimmed }}>PTS</div>
                                         </div>
                                     </div>
@@ -579,10 +614,10 @@ function PodiumCard({ driver, onClick }: { driver: PodiumDriver; onClick: () => 
     const pedestalH = isW ? "h-40" : driver.pos === 2 ? "h-32" : "h-28";
     const [imgError, setImgError] = useState(false);
 
-    // Try 2025 first, fallback to 2026
+    // Try 2025 first, fallback to 2026/default via getDriverImageUrl
     const imgUrl = imgError
         ? ''
-        : getMediaUrl('drivers', driver.id, '2025.webp');
+        : getDriverImageUrl(driver.id, 2025);
 
     return (
         <div className={`podium-card flex flex-col items-center justify-end w-1/3 ${isW ? "z-20" : ""} cursor-pointer`} onClick={onClick}>

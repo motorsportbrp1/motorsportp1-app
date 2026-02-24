@@ -170,6 +170,12 @@ export function stringToColor(str: string): string {
 
 /**
  * Get Team Logo URL from Supabase Storage
+ * -------------------------------------------------------------
+ * AQUI VOCÊ MODIFICA AS LOGOS DOS CONSTRUTORES (HOMEPAGE / CARD)
+ * O código abaixo procura pela "logo.png" de cada equipe. 
+ * Para atualizar a foto da equipe basta entrar na pasta:
+ * backend/media/teams/{nome-da-equipe}/logo.png
+ * -------------------------------------------------------------
  */
 export function getTeamLogoUrl(constructorId: string, year?: number): string {
     if (!constructorId) return "";
@@ -247,7 +253,8 @@ export function getDriverImageUrl(driverId: string, fallbackYear?: number): stri
         "max-verstappen": [2025, 2026],
         "michael-schumacher": [2006, 2012],
         "ayrton-senna": [1994],
-        "alain-prost": [1993]
+        "alain-prost": [1993],
+        "oscar-piastri": [2026]
     };
 
     let filename = "2026.webp"; // Default
@@ -274,7 +281,7 @@ export function getDriverImageUrl(driverId: string, fallbackYear?: number): stri
 /**
  * Get Supabase Storage URL for dynamic media
  */
-export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'seasons-index-cards', id: string, filename: string): string {
+export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'seasons-index-cards' | 'circuit-layouts' | 'homepage', id: string, filename: string): string {
     const isProd = process.env.NODE_ENV === 'production';
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
     const localBackendUrl = "http://localhost:8000";
@@ -288,6 +295,10 @@ export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'sea
     } else if (type === 'cars') {
         if (normalizedId === 'red_bull' || normalizedId === 'red-bull') normalizedId = 'redbull';
         else if (normalizedId === 'rb' || normalizedId === 'racing_bulls' || normalizedId === 'racing-bulls') normalizedId = 'racingbulls';
+    }
+
+    if (type === 'circuit-layouts' || type === 'homepage') {
+        return `${rootUrl}/${type}/${filename}`;
     }
 
     return `${rootUrl}/${type}/${normalizedId}/${filename}`;
