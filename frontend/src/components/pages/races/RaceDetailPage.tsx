@@ -181,10 +181,12 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
 
             setFastf1Loading(true);
             try {
+                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
                 const [stintsRes, speedRes, minisectorsRes] = await Promise.all([
-                    fetch(`http://localhost:8000/api/v1/sessions/${race.year}/${race.round}/${f1Session}/stints`),
-                    fetch(`http://localhost:8000/api/v1/sessions/${race.year}/${race.round}/${f1Session}/speed-traps`),
-                    fetch(`http://localhost:8000/api/v1/sessions/${race.year}/${race.round}/${f1Session}/minisectors?num=25`)
+                    fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/stints`),
+                    fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/speed-traps`),
+                    fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/minisectors?num=25`)
                 ]);
 
                 if (stintsRes.ok) {
@@ -202,7 +204,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                     setMinisectorsData(data.minisectors || []);
                 } else setMinisectorsData([]);
 
-                const sectorsRes = await fetch(`http://localhost:8000/api/v1/sessions/${race.year}/${race.round}/${f1Session}/best-sectors`);
+                const sectorsRes = await fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/best-sectors`);
                 if (sectorsRes.ok) {
                     const data = await sectorsRes.json();
                     setBestSectorsData(data.best_sectors || []);
