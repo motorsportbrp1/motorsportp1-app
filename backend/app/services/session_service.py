@@ -55,7 +55,7 @@ def clean_data(val):
     except:
         return str(val)
 
-def get_stints(year: int, round: int, session_name: str) -> List[Dict[str, Any]]:
+def get_stints(year: int, round: int, session_name: str, session=None) -> List[Dict[str, Any]]:
     """
     Get all tyre stints for a specific session.
     Returns: list of dicts with driver, stint number, compound, laps, and stint_time
@@ -65,7 +65,7 @@ def get_stints(year: int, round: int, session_name: str) -> List[Dict[str, Any]]
         return cached
 
     try:
-        session = get_fastf1_session(year, round, session_name)
+        session = session or get_fastf1_session(year, round, session_name)
         laps = session.laps
         
         if laps.empty:
@@ -145,7 +145,7 @@ def get_all_laps(year: int, round: int, session_name: str) -> List[Dict[str, Any
         logger.error(f"Error in get_all_laps for {year} R{round} {session_name}: {e}")
         return []
 
-def get_speed_traps(year: int, round: int, session_name: str) -> List[Dict[str, Any]]:
+def get_speed_traps(year: int, round: int, session_name: str, session=None) -> List[Dict[str, Any]]:
     """
     Get the top speeds for all drivers in S1, S2, S3, and SpeedTrap.
     Returns: max speeds per driver
@@ -155,7 +155,7 @@ def get_speed_traps(year: int, round: int, session_name: str) -> List[Dict[str, 
         return cached
 
     try:
-        session = get_fastf1_session(year, round, session_name)
+        session = session or get_fastf1_session(year, round, session_name)
         laps = session.laps
         
         if laps.empty:
@@ -194,74 +194,68 @@ def get_speed_traps(year: int, round: int, session_name: str) -> List[Dict[str, 
         logger.error(f"Error in get_speed_traps for {year} R{round} {session_name}: {e}")
         return []
 
-def get_minisectors(year: int, round: int, session_name: str, num_minisectors: int = 25) -> List[Dict[str, Any]]:
+def get_minisectors(year: int, round: int, session_name: str, num_minisectors: int = 3, session=None) -> List[Dict[str, Any]]:
     """
-    Get the fastest driver for track segments (minisectors) based on telemetry.
-    Returns: list of minisectors with X, Y points and fastest driver abbreviation.
+    Get the fastest driver for S1, S2, and S3 track segments based on telemetry and best sectors.
+    Returns: list of 3 sectors with X, Y points and fastest driver abbreviation.
     """
     cached = get_cached_data(year, round, session_name, 'minisectors')
     if cached is not None:
         return cached
 
     try:
-        session = get_fastf1_session(year, round, session_name)
+        session = session or get_fastf1_session(year, round, session_name)
         laps = session.laps
         if laps.empty:
             return []
 
-        drivers = pd.unique(laps['Driver'])
-        
-        telemetry_list = []
-        for drv in drivers:
-            drv_laps = laps.pick_drivers(drv)
-            fastest_lap = drv_laps.pick_fastest()
-            if getattr(fastest_lap, "isna", lambda: True)().all():
-                continue
-            
-            try:
-                tel = fastest_lap.get_telemetry()
-                tel['Driver'] = drv
-                telemetry_list.append(tel)
-            except Exception as e:
-                logger.warning(f"Could not load telemetry for {drv}: {e}")
-                
-        if not telemetry_list:
+        # Find fastest driver per sector using get_best_sectors
+        best_sectors = get_best_sectors(year, round, session_name, session=session)
+        if not best_sectors:
             return []
             
-        telemetry = pd.concat(telemetry_list)
+        valid_s1 = [d for d in best_sectors if d['s1'] is not None]
+        valid_s2 = [d for d in best_sectors if d['s2'] is not None]
+        valid_s3 = [d for d in best_sectors if d['s3'] is not None]
         
-        total_distance = telemetry['Distance'].max()
-        minisector_length = total_distance / num_minisectors
+        fastest_s1 = min(valid_s1, key=lambda x: x['s1'])['driver'] if valid_s1 else 'Unknown'
+        fastest_s2 = min(valid_s2, key=lambda x: x['s2'])['driver'] if valid_s2 else 'Unknown'
+        fastest_s3 = min(valid_s3, key=lambda x: x['s3'])['driver'] if valid_s3 else 'Unknown'
         
-        telemetry['Minisector'] = telemetry['Distance'].apply(
-            lambda dist: int((dist // minisector_length) + 1)
-        )
+        fastest_drivers_map = {1: fastest_s1, 2: fastest_s2, 3: fastest_s3}
         
-        # Calculate max average speed
-        tel_data = telemetry[['Driver', 'Minisector', 'Speed', 'X', 'Y']]
-        pace = tel_data.groupby(['Minisector', 'Driver'])['Speed'].mean().reset_index()
-        
-        fastest_drivers = pace.loc[pace.groupby('Minisector')['Speed'].idxmax()]
-        fastest_drivers_map = fastest_drivers.set_index('Minisector')['Driver'].to_dict()
-        
+        # Get track geometry from absolute fastest lap
         abs_fastest = laps.pick_fastest()
+        if abs_fastest is None or pd.isna(abs_fastest.get('LapTime')):
+            return []
+            
         ref_tel = abs_fastest.get_telemetry()
-        ref_tel['Minisector'] = ref_tel['Distance'].apply(
-             lambda dist: int((dist // minisector_length) + 1)
-        )
+        
+        s1_time = abs_fastest['Sector1SessionTime']
+        s2_time = abs_fastest['Sector2SessionTime']
+        
+        def assign_sector(t):
+            if pd.isna(s1_time) or t <= s1_time: return 1
+            if pd.isna(s2_time) or t <= s2_time: return 2
+            return 3
+            
+        ref_tel['Minisector'] = ref_tel['SessionTime'].apply(assign_sector)
         
         segments = []
-        for minisector_id in sorted(ref_tel['Minisector'].unique()):
-            fastest_driver = fastest_drivers_map.get(minisector_id)
-            if not fastest_driver:
+        for sector_id in [1, 2, 3]:
+            fastest_driver = fastest_drivers_map.get(sector_id)
+            if not fastest_driver or fastest_driver == 'Unknown':
                 continue
                 
-            ms_tel = ref_tel[ref_tel['Minisector'] == minisector_id]
+            ms_tel = ref_tel[ref_tel['Minisector'] == sector_id]
+            if ms_tel.empty:
+                continue
+                
             # Convert X,Y to points array
             points = ms_tel[['X', 'Y']].values.tolist()
             
             segments.append({
-                "minisector": int(minisector_id),
+                "minisector": int(sector_id),
                 "fastest_driver": str(fastest_driver),
                 "points": points
             })
@@ -274,7 +268,7 @@ def get_minisectors(year: int, round: int, session_name: str, num_minisectors: i
         logger.error(f"Error in get_minisectors for {year} R{round} {session_name}: {e}")
         return []
 
-def get_best_sectors(year: int, round_num: int, session_name: str) -> List[Dict[str, Any]]:
+def get_best_sectors(year: int, round_num: int, session_name: str, session=None) -> List[Dict[str, Any]]:
     """
     Get the fastest driver for each sector and judge personal performance.
     Colors: 2 = Purple (Fastest in Session), 1 = Green (Personal Best), 0 = Yellow (Slower).
@@ -284,7 +278,7 @@ def get_best_sectors(year: int, round_num: int, session_name: str) -> List[Dict[
         return cached
 
     try:
-        session = get_fastf1_session(year, round_num, session_name)
+        session = session or get_fastf1_session(year, round_num, session_name)
         laps = session.laps
         if laps.empty:
             return []
@@ -301,8 +295,8 @@ def get_best_sectors(year: int, round_num: int, session_name: str) -> List[Dict[
             drv_laps = laps.pick_drivers(drv)
             fastest_lap = drv_laps.pick_fastest()
             
-            # Use getattr approach to check for Series/Empty in pick_fastest
-            if getattr(fastest_lap, "isna", lambda: True)().all() or pd.isna(fastest_lap['LapTime']):
+            # Check if lap has a valid time
+            if fastest_lap is None or pd.isna(fastest_lap.get('LapTime')):
                 continue
 
             # Personal bests for this driver in this session (Green)
@@ -338,3 +332,47 @@ def get_best_sectors(year: int, round_num: int, session_name: str) -> List[Dict[
     except Exception as e:
         logger.error(f"Error in get_best_sectors for {year} R{round_num} {session_name}: {e}")
         return []
+
+def get_fastf1_summary_data(year: int, round_num: int, session_name: str) -> Dict[str, Any]:
+    """
+    Unified method to load FastF1 session ONCE, and calculate all 4 widget data sets.
+    """
+    # Check if we have all 4 in cache first to skip loading
+    stints_cached = get_cached_data(year, round_num, session_name, 'stints')
+    speeds_cached = get_cached_data(year, round_num, session_name, 'speed_traps')
+    minis_cached = get_cached_data(year, round_num, session_name, 'minisectors')
+    best_cached = get_cached_data(year, round_num, session_name, 'best_sectors')
+    
+    if all(x is not None for x in [stints_cached, speeds_cached, minis_cached, best_cached]):
+        return {
+            "stints": stints_cached,
+            "speed_traps": speeds_cached,
+            "minisectors": minis_cached,
+            "best_sectors": best_cached
+        }
+        
+    try:
+        # Load exactly once
+        session = get_fastf1_session(year, round_num, session_name)
+        
+        # Calculate with the same session
+        stints = get_stints(year, round_num, session_name, session=session)
+        speeds = get_speed_traps(year, round_num, session_name, session=session)
+        minis = get_minisectors(year, round_num, session_name, session=session)
+        best = get_best_sectors(year, round_num, session_name, session=session)
+        
+        return {
+            "stints": stints,
+            "speed_traps": speeds,
+            "minisectors": minis,
+            "best_sectors": best
+        }
+    except Exception as e:
+        logger.error(f"Error generating fastf1 summary for {year} R{round_num} {session_name}: {e}")
+        return {
+            "stints": [],
+            "speed_traps": [],
+            "minisectors": [],
+            "best_sectors": []
+        }
+

@@ -7,7 +7,7 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getCountryFlagUrl, getMediaUrl, getTeamLogoUrl } from "@/lib/utils";
+import { handleImageFallback, getCountryFlagUrl, getMediaUrl, getTeamLogoUrl } from "@/lib/utils";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 /* ── Shorthand color helpers ── */
@@ -382,7 +382,7 @@ export default function TeamProfilePage({ id }: TeamProfilePageProps) {
                                 </div>
                                 <div className="hidden md:block bg-white/10 backdrop-blur-md p-4 rounded-lg border border-white/10">
                                     {/* TODO: AJUSTE DE ENQUADRAMENTO DO LOGO AQUI (ex: padding p-4 da div pai, h-24 da imagem ou object-contain) */}
-                                    <img src={team.logoUrl} alt="Team Logo" className="h-24 w-auto drop-shadow-lg object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                    <img src={team.logoUrl} alt="Team Logo" className="h-24 w-auto drop-shadow-lg object-contain" onError={handleImageFallback} />
                                 </div>
                             </div>
 
@@ -423,7 +423,7 @@ export default function TeamProfilePage({ id }: TeamProfilePageProps) {
                                     {drv.imageUrl && (
                                         <div className="absolute -bottom-8 left-6">
                                             <div className="w-20 h-20 rounded-full border-4 shadow-xl overflow-hidden bg-zinc-900" style={{ borderColor: teamColor }}>
-                                                <img src={drv.imageUrl} alt={drv.name} className="w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                <img src={drv.imageUrl} alt={drv.name} className="w-full h-full object-cover object-top" onError={handleImageFallback} />
                                             </div>
                                         </div>
                                     )}
@@ -631,7 +631,7 @@ export default function TeamProfilePage({ id }: TeamProfilePageProps) {
                                     <div className="h-32 w-full relative flex items-center justify-center p-4 transition-colors" style={{ backgroundColor: hexToRgba(teamColor, 0.15) }}>
                                         {car.imageUrl ? (
                                             <div className="relative w-full h-full drop-shadow-2xl">
-                                                <img src={car.imageUrl} alt={car.name} className="w-full h-full object-contain filter brightness-110 contrast-125 transition-transform group-hover:scale-105" onError={(e) => { e.currentTarget.style.opacity = '0'; }} />
+                                                <img src={car.imageUrl} alt={car.name} className="w-full h-full object-contain filter brightness-110 contrast-125 transition-transform group-hover:scale-105" onError={handleImageFallback} />
                                             </div>
                                         ) : (
                                             <span className="material-symbols-outlined !text-6xl opacity-20" style={{ color: teamColor }}>directions_car</span>

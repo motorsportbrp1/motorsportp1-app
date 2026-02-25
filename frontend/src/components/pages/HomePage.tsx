@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import Link from "next/link";
-import { getCountryFlagUrl, getMediaUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
+import { handleImageFallback, getCountryFlagUrl, getMediaUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { fetchNextRace, fetchLastRacePodium, getConstructorColor } from "@/lib/supabase-queries";
 
@@ -205,9 +205,7 @@ export default function HomePage() {
                                         src={getMediaUrl('homepage', '', `${nextRace.country.toLowerCase().replace(/\s+/g, '-')}-gp-raceweekend.jpeg`)}
                                         className="w-full h-full object-cover opacity-40 mix-blend-screen group-hover:scale-105 transition-transform duration-700"
                                         alt={nextRace.name}
-                                        onError={(e) => {
-                                            e.currentTarget.src = "https://images.unsplash.com/photo-1541348263662-e068662d82af?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80";
-                                        }}
+                                        onError={handleImageFallback}
                                     />
                                 ) : (
                                     <div className="w-full h-full opacity-40 group-hover:scale-105 transition-transform duration-700" style={{ background: C.lighter }} />
@@ -265,11 +263,7 @@ export default function HomePage() {
                                             className="w-[80%] max-h-[80%] object-contain filter brightness-0 invert opacity-80"
                                             style={{ filter: "drop-shadow(0 0 10px rgba(255,255,255,0.2))" }}
                                             alt={`Layout do Circuito - ${nextRace.country}`}
-                                            onError={(e) => {
-                                                // If layout PNG is missing, fallback to generic track icon
-                                                e.currentTarget.style.display = 'none';
-                                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                            }}
+                                            onError={handleImageFallback}
                                         />
                                     ) : null}
                                     <div className="hidden text-white/20 flex-col items-center gap-2">
@@ -455,7 +449,7 @@ export default function HomePage() {
                                     <div key={t.name} className="flex items-center p-2 rounded-lg transition-colors cursor-pointer mb-1 hover:bg-white/5">
                                         <span className="text-sm font-bold w-5 text-center" style={{ color: i === 0 ? C.primary : C.dimmed }}>{i + 1}</span>
                                         <div className="w-8 h-8 rounded shrink-0 flex items-center justify-center bg-white/5 mx-3 p-1 shrink-0 border border-white/5 shadow-inner">
-                                            <img src={getTeamLogoUrl(t.id)} alt={t.name} className="w-full h-full object-contain filter" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                            <img src={getTeamLogoUrl(t.id)} alt={t.name} className="w-full h-full object-contain filter" onError={handleImageFallback} />
                                         </div>
                                         <div className="flex-1">
                                             <div className="text-xs font-bold text-white uppercase">{t.name}</div>
@@ -555,7 +549,7 @@ export default function HomePage() {
                             </div>
                             <div className="flex items-center gap-4 mb-6">
                                 <div className="w-20 h-20 rounded-full flex items-center justify-center overflow-hidden" style={{ border: `2px solid ${C.primary}`, background: "#1e293b" }}>
-                                    <img src={getMediaUrl('drivers', modal.id, '2026.webp')} alt={modal.name} className="w-full h-full object-cover object-center scale-110" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                    <img src={getMediaUrl('drivers', modal.id, '2026.webp')} alt={modal.name} className="w-full h-full object-cover object-center scale-110" onError={handleImageFallback} />
                                     <span className="material-symbols-outlined text-4xl hidden" style={{ color: C.muted }}>person</span>
                                 </div>
                                 <div>

@@ -24,7 +24,7 @@ def get_driver_telemetry(year: int, round: int, session_name: str, driver_id: st
             return {}
             
         fastest_lap = driver_laps.pick_fastest()
-        if pd.isna(fastest_lap['LapTime']):
+        if fastest_lap is None or pd.isna(fastest_lap.get('LapTime')):
             return {}
             
         telemetry = fastest_lap.get_telemetry()

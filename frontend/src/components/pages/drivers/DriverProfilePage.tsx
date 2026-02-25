@@ -6,7 +6,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import ReactECharts from 'echarts-for-react';
 import { supabase } from "@/lib/supabase";
-import { getCountryFlagUrl, getMediaUrl, getCarImageUrl, getTeamLogoUrl } from "@/lib/utils";
+import { handleImageFallback, getCountryFlagUrl, getMediaUrl, getCarImageUrl, getTeamLogoUrl } from "@/lib/utils";
 
 /* ── Shorthand color helpers ── */
 const C = {
@@ -412,7 +412,7 @@ export default function DriverProfilePage({ id }: DriverProfilePageProps) {
                                 <div className="relative group">
                                     {driver.image ? (
                                         <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 overflow-hidden shadow-2xl transition-transform group-hover:scale-105 bg-zinc-900" style={{ borderColor: hexToRgba(driver.color, 0.4) }}>
-                                            <img src={driver.image} alt={driver.lastName} className="w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                            <img src={driver.image} alt={driver.lastName} className="w-full h-full object-cover object-top" onError={handleImageFallback} />
                                             <div className="w-full h-full flex items-center justify-center text-white text-5xl font-bold hidden">
                                                 {driver.firstName ? driver.firstName[0] : ""}
                                                 {driver.lastName ? driver.lastName[0] : ""}
@@ -611,13 +611,13 @@ export default function DriverProfilePage({ id }: DriverProfilePageProps) {
                                             <td className="px-6 py-5 font-bold text-white text-base group-hover:text-white transition-colors">{v.gp}</td>
                                             <td className="px-6 py-2">
                                                 <div className="w-[120px] aspect-video relative flex items-center justify-center">
-                                                    <img src={v.carImage} alt={`Car ${v.year}`} className="object-contain w-full h-full drop-shadow-2xl transition-transform group-hover:scale-110" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                    <img src={v.carImage} alt={`Car ${v.year}`} className="object-contain w-full h-full drop-shadow-2xl transition-transform group-hover:scale-110" onError={handleImageFallback} />
                                                 </div>
                                             </td>
                                             <td className="px-6 py-2">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-11 h-11 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shrink-0 overflow-hidden">
-                                                        <img src={v.constructorLogo} alt={v.constructor} className="object-contain w-full h-full scale-[1.0]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                        <img src={v.constructorLogo} alt={v.constructor} className="object-contain w-full h-full scale-[1.0]" onError={handleImageFallback} />
                                                     </div>
                                                     <span className="font-bold text-sm tracking-wide">{v.constructor}</span>
                                                 </div>

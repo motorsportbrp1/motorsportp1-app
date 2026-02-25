@@ -67,6 +67,39 @@ motorsportp1/
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
 
+### Running the Backend Locally
+
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+
+2. Activate the virtual environment:
+   - **Windows (PowerShell)**:
+     ```bash
+     .\venv\Scripts\Activate.ps1
+     ```
+   - **Windows (Command Prompt)**:
+     ```bash
+     venv\Scripts\activate.bat
+     ```
+   - **Mac/Linux**:
+     ```bash
+     source venv/bin/activate
+     ```
+
+3. Install dependencies (if needed):
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Start the FastF1 backend server:
+   ```bash
+   python main.py
+   ```
+
+5. Access the API at [http://localhost:8000](http://localhost:8000) and docs at [http://localhost:8000/docs](http://localhost:8000/docs).
+
 ## 🎨 Features & Pages
 
 - **Home (`/`)**: Overview Dashboard.

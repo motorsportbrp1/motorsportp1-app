@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getMediaUrl, getTeamLogoUrl, getDriverImageUrl, getSeasonCardImageUrl } from "@/lib/utils";
+import { handleImageFallback, getMediaUrl, getTeamLogoUrl, getDriverImageUrl, getSeasonCardImageUrl } from "@/lib/utils";
 
 // Era definitions
 const ERAS = [
@@ -337,7 +337,7 @@ export default function SeasonsIndexPage() {
                                                     src={getSeasonCardImageUrl(season.year)}
                                                     alt={`F1 Season ${season.year}`}
                                                     className="w-full h-full object-cover opacity-60 mix-blend-screen mix-blend-luminosity"
-                                                    onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }}
+                                                    onError={handleImageFallback}
                                                 />
                                             ) : (
                                                 <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1541348263662-e068662d82af?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=60')" }}></div>
@@ -356,7 +356,7 @@ export default function SeasonsIndexPage() {
                                                 <div className="flex flex-col gap-2">
                                                     {season.championImage && (
                                                         <div className="w-14 h-14 rounded-full overflow-hidden border border-white/10 shrink-0 bg-surface-darker shadow mt-1">
-                                                            <img src={season.championImage} alt={season.champion} className="w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                                            <img src={season.championImage} alt={season.champion} className="w-full h-full object-cover object-top" onError={handleImageFallback} />
                                                             <div className="hidden w-full h-full flex items-center justify-center text-white font-bold text-xl">{season.champion?.[0]}</div>
                                                         </div>
                                                     )}
@@ -370,7 +370,7 @@ export default function SeasonsIndexPage() {
                                                 {/* Team logo badge */}
                                                 {season.championTeamId && season.championTeamId !== "unknown" ? (
                                                     <div className="size-6 rounded-full overflow-hidden bg-white/10 flex items-center justify-center border border-white/10 shrink-0">
-                                                        <img src={getTeamLogoUrl(season.championTeamId, season.year)} alt={season.championTeam} className="w-full h-full object-contain p-0.5 scale-[1.2]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                                        <img src={getTeamLogoUrl(season.championTeamId, season.year)} alt={season.championTeam} className="w-full h-full object-contain p-0.5 scale-[1.2]" onError={handleImageFallback} />
                                                         <span className={`hidden size-6 rounded-full flex flex-col items-center justify-center text-[10px] font-bold border ${season.championTeamColor}`}>
                                                             {season.championAbbr}
                                                         </span>
@@ -392,7 +392,7 @@ export default function SeasonsIndexPage() {
                                                 <span className="text-white text-sm font-bold text-right">{season.constructorsChampion}</span>
                                                 {season.constructorsChampionId && (
                                                     <div className="size-10 rounded-md overflow-hidden bg-white/10 flex items-center justify-center shrink-0 border border-white/5">
-                                                        <img src={getTeamLogoUrl(season.constructorsChampionId, season.year)} alt="" className="w-full h-full object-contain p-1.5 drop-shadow-sm scale-[1.4]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                        <img src={getTeamLogoUrl(season.constructorsChampionId, season.year)} alt="" className="w-full h-full object-contain p-1.5 drop-shadow-sm scale-[1.4]" onError={handleImageFallback} />
                                                     </div>
                                                 )}
                                             </div>
@@ -421,7 +421,7 @@ export default function SeasonsIndexPage() {
                             {topDrivers.length > 0 ? topDrivers.map((driver, idx) => (
                                 <div key={idx} className="flex items-center gap-3">
                                     <div className={`w-10 h-10 rounded-full overflow-hidden border border-white/10 shrink-0 ${idx >= 2 ? 'grayscale' : ''}`}>
-                                        <img src={driver.img} alt={driver.name} className="w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                        <img src={driver.img} alt={driver.name} className="w-full h-full object-cover object-top" onError={handleImageFallback} />
                                         <div className="hidden w-10 h-10 rounded-full bg-surface-lighter border border-white/10 flex items-center justify-center text-white font-bold text-xs shrink-0">
                                             {driver.name.split(' ').map((w: string) => w[0]).join('')}
                                         </div>
@@ -457,7 +457,7 @@ export default function SeasonsIndexPage() {
                             {topConstructors.length > 0 ? topConstructors.map((team, idx) => (
                                 <div key={idx} className="flex items-center gap-3">
                                     <div className="size-8 rounded overflow-hidden bg-white/10 flex items-center justify-center border border-white/10 shrink-0">
-                                        <img src={team.logo} alt={team.name} className="w-full h-full object-contain p-1" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                        <img src={team.logo} alt={team.name} className="w-full h-full object-contain p-1" onError={handleImageFallback} />
                                         <div className={`hidden size-8 rounded flex items-center justify-center font-bold text-xs ${team.badgeColor}`}>
                                             {team.abbr}
                                         </div>

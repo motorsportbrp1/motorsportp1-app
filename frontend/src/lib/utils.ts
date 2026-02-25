@@ -197,8 +197,8 @@ export function getTeamLogoUrl(constructorId: string, year?: number): string {
         'racing-bulls': { folder: 'racingbulls', filename: 'visa-rb-soymotor.2024.png' },
         haas: { folder: 'haas', filename: 'logo.svg' },
         'haas-f1-team': { folder: 'haas', filename: 'logo.svg' },
-        sauber: { folder: 'sauber', filename: 'logo.webp' },
-        'kick-sauber': { folder: 'sauber', filename: 'logo.webp' },
+        sauber: { folder: 'sauber', filename: '2025-kick-sauber.png' },
+        'kick-sauber': { folder: 'sauber', filename: '2025-kick-sauber.png' },
         audi: { folder: 'audi', filename: 'logo-audi-f1-2026.png' },
         cadillac: { folder: 'cadillac', filename: 'logo-cadillac-f1-2026.png' },
         lotus: { folder: 'lotusf1team', filename: 'Lotus_F1_Team_logo.svg' },
@@ -243,18 +243,74 @@ export function getCarImageUrl(constructorId: string, year: number | string): st
 export function getDriverImageUrl(driverId: string, fallbackYear?: number): string {
     if (!driverId) return "";
 
-    const normalizedId = driverId.toLowerCase().replace(/_/g, '-');
+    let normalizedId = driverId.toLowerCase().replace(/_/g, '-');
+
+    // Map F1DB standard driverIds (usually last names) to specific folder names
+    const aliasMap: Record<string, string> = {
+        "tsunoda": "yuki-tsunoda",
+        "albon": "alexander-albon",
+        "lawson": "liam-lawson",
+        "sainz": "carlos-sainz",
+        "carlos-sainz-jr": "carlos-sainz",
+        "hadjar": "isack-hadjar",
+        "doohan": "jack-doohan",
+        "ocon": "esteban-ocon",
+        "russell": "george-russell",
+        "antonelli": "kimi-antonelli",
+        "bearman": "oliver-bearman",
+        "colapinto": "franco-colapinto",
+        "bortoleto": "gabriel-bortoleto",
+        "stroll": "lance-stroll",
+        "lindblad": "arvid-lindblad",
+        "gasly": "pierre-gasly",
+        "hulkenberg": "nico-hulkenberg",
+        "norris": "lando-norris",
+        "leclerc": "charles-leclerc",
+        "alonso": "fernando-alonso",
+        "magnussen": "kevin-magnussen",
+        "bottas": "valtteri-bottas",
+        "ricciardo": "daniel-ricciardo",
+        "sargeant": "logan-sargeant",
+        "zhou": "guanyu-zhou",
+        "perez": "sergio-perez",
+        "piastri": "oscar-piastri",
+        "hamilton": "lewis-hamilton",
+    };
+
+    if (aliasMap[normalizedId]) {
+        normalizedId = aliasMap[normalizedId];
+    }
+
     const year = fallbackYear || new Date().getFullYear();
 
     // Specific logic for drivers with multiple known years
     const specialAssets: Record<string, number[]> = {
-        "fernando-alonso": [2005, 2006, 2022, 2026],
+        "fernando-alonso": [2005, 2006, 2022, 2025, 2026],
         "lewis-hamilton": [2022, 2025, 2026],
         "max-verstappen": [2025, 2026],
         "michael-schumacher": [2006, 2012],
         "ayrton-senna": [1994],
         "alain-prost": [1993],
-        "oscar-piastri": [2026]
+        "oscar-piastri": [2026],
+        "george-russell": [2025, 2026],
+        "kimi-antonelli": [2025, 2026],
+        "lance-stroll": [2025, 2026],
+        "liam-lawson": [2025, 2026],
+        "charles-leclerc": [2025, 2026],
+        "lando-norris": [2025, 2026],
+        "carlos-sainz": [2025, 2026],
+        "carlos-sainz-jr": [2025, 2026],
+        "alexander-albon": [2025, 2026],
+        "yuki-tsunoda": [2025, 2026],
+        "esteban-ocon": [2022, 2025, 2026],
+        "pierre-gasly": [2025, 2026],
+        "jack-doohan": [2025, 2026],
+        "nico-hulkenberg": [2025, 2026],
+        "gabriel-bortoleto": [2025, 2026],
+        "isack-hadjar": [2025, 2026],
+        "franco-colapinto": [2025, 2026],
+        "oliver-bearman": [2025, 2026],
+        "arvid-lindblad": [2025, 2026]
     };
 
     let filename = "2026.webp"; // Default
@@ -330,4 +386,34 @@ export function getSeasonCardImageUrl(year: number): string {
     }
 
     return "";
+}
+
+/**
+ * Handle image loading errors by trying alternative file extensions (.webp -> .png -> .jpg -> .jpeg).
+ * Use this in React: <img src={src} onError={handleImageFallback} />
+ */
+export function handleImageFallback(e: React.SyntheticEvent<HTMLImageElement, Event>) {
+    const img = e.currentTarget;
+    const currentSrc = img.src;
+
+    // Prevent infinite loops if the fallback itself fails
+    if (img.dataset.failed) return;
+
+    if (currentSrc.includes('.webp')) {
+        img.src = currentSrc.replace('.webp', '.png');
+    } else if (currentSrc.includes('.png')) {
+        img.src = currentSrc.replace('.png', '.jpg');
+    } else if (currentSrc.includes('.jpg')) {
+        img.src = currentSrc.replace('.jpg', '.jpeg');
+    } else {
+        // All known extensions failed, mark it to avoid looping
+        img.dataset.failed = 'true';
+        // Hide the broken image icon
+        img.style.display = 'none';
+
+        // Automatically reveal any hidden placeholder siblings (e.g. initials icons)
+        if (img.nextElementSibling && img.nextElementSibling.classList.contains('hidden')) {
+            img.nextElementSibling.classList.remove('hidden');
+        }
+    }
 }

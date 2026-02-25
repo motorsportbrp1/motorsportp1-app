@@ -89,9 +89,29 @@ Com a base pronta, os próximos recursos que o backend habilitará são:
 
 ## 🚀 Como rodar o Backend
 
+1. Entre na pasta do backend:
 ```powershell
 cd backend
-venv\Scripts\python.exe main.py
+```
+
+2. Ative o ambiente virtual (venv):
+- **No PowerShell:**
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+- **No Command Prompt (cmd):**
+```cmd
+venv\Scripts\activate.bat
+```
+
+3. Instale as dependências (caso seja a primeira vez):
+```powershell
+pip install -r requirements.txt
+```
+
+4. Inicie o servidor FastAPI:
+```powershell
+python main.py
 ```
 
 Acesse:

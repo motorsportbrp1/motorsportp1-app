@@ -5,7 +5,7 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getCountryFlagUrl, getTeamLogoUrl } from "@/lib/utils";
+import { handleImageFallback, getCountryFlagUrl, getTeamLogoUrl } from "@/lib/utils";
 
 /* ── Shorthand color helpers ── */
 const C = {
@@ -190,7 +190,7 @@ export default function TeamsIndexPage() {
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-full border-2 bg-white flex items-center justify-center text-xl font-bold overflow-hidden shadow-lg shrink-0" style={{ borderColor: team.color, color: team.color }}>
                                             {/* TODO: AJUSTE DE ENQUADRAMENTO DO LOGO AQUI (ex: mexer no padding p-1, object-contain, ou scale) */}
-                                            <img src={getTeamLogoUrl(team.id)} alt={team.name} className="w-full h-full object-cover" style={{borderRadius: '50%'}} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                            <img src={getTeamLogoUrl(team.id)} alt={team.name} className="w-full h-full object-cover" style={{borderRadius: '50%'}} onError={handleImageFallback} />
                                             <span className="hidden">{team.name.charAt(0)}</span>
                                         </div>
                                         <div>

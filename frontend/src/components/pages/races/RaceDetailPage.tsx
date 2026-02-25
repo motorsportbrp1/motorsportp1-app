@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
+import { handleImageFallback, getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
 
 // Types
 type SessionType = 'fp1' | 'fp2' | 'fp3' | 'sprint_quali' | 'sprint' | 'qualifying' | 'race';
@@ -183,35 +183,28 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
             try {
                 const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-                const [stintsRes, speedRes, minisectorsRes] = await Promise.all([
-                    fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/stints`),
-                    fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/speed-traps`),
-                    fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/minisectors?num=25`)
-                ]);
+                const response = await fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/fastf1-summary`);
+                if (response.ok) {
+                    const data = await response.json();
 
-                if (stintsRes.ok) {
-                    const data = await stintsRes.json();
                     setStintsData(data.stints || []);
-                } else setStintsData([]);
-
-                if (speedRes.ok) {
-                    const data = await speedRes.json();
                     setSpeedTrapsData(data.speed_traps || []);
-                } else setSpeedTrapsData([]);
-
-                if (minisectorsRes.ok) {
-                    const data = await minisectorsRes.json();
                     setMinisectorsData(data.minisectors || []);
-                } else setMinisectorsData([]);
-
-                const sectorsRes = await fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/best-sectors`);
-                if (sectorsRes.ok) {
-                    const data = await sectorsRes.json();
                     setBestSectorsData(data.best_sectors || []);
-                } else setBestSectorsData([]);
+                } else {
+                    console.error("Failed to fetch FastF1 summary");
+                    setStintsData([]);
+                    setSpeedTrapsData([]);
+                    setMinisectorsData([]);
+                    setBestSectorsData([]);
+                }
 
             } catch (err) {
                 console.error("FastF1 Error:", err);
+                setStintsData([]);
+                setSpeedTrapsData([]);
+                setMinisectorsData([]);
+                setBestSectorsData([]);
             } finally {
                 setFastf1Loading(false);
             }
@@ -361,20 +354,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
 
     }, [minisectorsData, currentResults, raceResults]);
 
-    const sectorDominanceLegend = React.useMemo(() => {
-        if (!trackPaths) return [];
-        const counts: Record<string, { count: number, color: string }> = {};
-        trackPaths.forEach((tp: any) => {
-            if (!counts[tp.driver]) counts[tp.driver] = { count: 0, color: tp.color };
-            counts[tp.driver].count++;
-        });
-        return Object.entries(counts)
-            .map(([driver, data]) => ({ driver, ...data }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 3); // Top 3 dominant drivers
-    }, [trackPaths]);
-
-
+    // sectorDominanceLegend removed in favor of direct trackPaths mapping
     if (loading) {
         return (
             <div className="min-h-screen flex flex-col justify-center items-center text-white bg-[#1a1b1e]">
@@ -517,7 +497,22 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                             const s3Color = drvSectors ? getSectorColor(drvSectors.s3_color) : "bg-[#303238]";
 
                                             const posText = d.positiontext || d.positionnumber?.toString() || '-';
-                                            const rawTime = activeTab === 'qualifying' && d.q3 ? d.q3 : d.time;
+
+                                            const isQuali = activeTab === 'qualifying' || activeTab === 'sprint_quali';
+                                            let rawTime = d.time;
+                                            let eliminatedStatus = null;
+
+                                            if (isQuali) {
+                                                if (d.q3 && d.q3 !== "\\N") {
+                                                    rawTime = d.q3;
+                                                } else if (d.q2 && d.q2 !== "\\N") {
+                                                    rawTime = d.q2;
+                                                    eliminatedStatus = activeTab === 'sprint_quali' ? 'SQ2' : 'Q2';
+                                                } else if (d.q1 && d.q1 !== "\\N") {
+                                                    rawTime = d.q1;
+                                                    eliminatedStatus = activeTab === 'sprint_quali' ? 'SQ1' : 'Q1';
+                                                }
+                                            }
 
                                             let displayTime = rawTime !== "\\N" && rawTime ? rawTime : '-';
                                             let gapText = idx === 0 ? "-" : (d.gap || d.reasonretired || '-');
@@ -537,10 +532,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                                                     src={getDriverImageUrl(d.driverid, race?.year)}
                                                                     alt={d.driverLastName}
                                                                     className="w-full h-full object-cover object-top"
-                                                                    onError={(e) => {
-                                                                        e.currentTarget.style.opacity = '0';
-                                                                        // Optional: e.currentTarget.src = getTeamLogoUrl(d.constructorid, race?.year);
-                                                                    }}
+                                                                    onError={handleImageFallback}
                                                                 />
                                                             </div>
                                                             {d.driverName} {!d.driverName?.includes(d.driverLastName) && d.driverLastName ? ` ${d.driverLastName}` : ''}
@@ -550,14 +542,24 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                                         <div className="flex items-center gap-2">
                                                             {d.constructorid && (
                                                                 <div className="w-6 h-6 rounded flex items-center justify-center p-0.5 bg-white/5 border border-white/5 shadow-inner shrink-0">
-                                                                    <img src={getTeamLogoUrl(d.constructorid, race?.year)} alt={d.constructorName} className="w-full h-full object-contain filter drop-shadow-sm" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                                    <img src={getTeamLogoUrl(d.constructorid, race?.year)} alt={d.constructorName} className="w-full h-full object-contain filter drop-shadow-sm" onError={handleImageFallback} />
                                                                 </div>
                                                             )}
                                                             <span className="truncate">{d.constructorName}</span>
                                                         </div>
                                                     </td>
                                                     <td className={`py-3 font-mono ${idx === 0 ? 'text-[#e81932] font-bold' : 'text-slate-300'}`}>
-                                                        {displayTime}
+                                                        <div className="flex items-center gap-2">
+                                                            <span>{displayTime}</span>
+                                                            {eliminatedStatus && (
+                                                                <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-widest ${eliminatedStatus.includes('1')
+                                                                    ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                                    : 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
+                                                                    }`}>
+                                                                    Out {eliminatedStatus}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="py-3 text-slate-500 font-mono text-xs">
                                                         {gapText}
@@ -624,7 +626,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                         <div className="flex items-center justify-between mb-3 mt-1">
                                             <div className="flex items-center gap-2">
                                                 <div className="w-5 h-5 rounded flex items-center justify-center p-0.5 bg-white/5 border border-white/5 shadow-inner shrink-0">
-                                                    <img src={getTeamLogoUrl(t.id, race?.year)} alt={t.team} className="w-full h-full object-contain filter drop-shadow-sm" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                    <img src={getTeamLogoUrl(t.id, race?.year)} alt={t.team} className="w-full h-full object-contain filter drop-shadow-sm" onError={handleImageFallback} />
                                                 </div>
                                                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[80px]">{t.team}</span>
                                             </div>
@@ -683,14 +685,14 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                     </div>
                                 )}
 
-                                {sectorDominanceLegend.length > 0 && !fastf1Loading && (
+                                {trackPaths && !fastf1Loading && (
                                     <div className="absolute bottom-4 left-4 right-4 space-y-3">
-                                        {sectorDominanceLegend.map((lg, i) => (
-                                            <div key={i} className="flex justify-between items-center text-xs">
-                                                <span className="text-slate-500 uppercase font-bold tracking-widest text-[9px]">{lg.count} Minisectors</span>
+                                        {trackPaths.map((tp: any) => (
+                                            <div key={tp.id} className="flex justify-between items-center text-xs">
+                                                <span className="text-slate-500 uppercase font-bold tracking-widest text-[9px]">Sector {tp.id}</span>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="font-mono text-white text-xs">{lg.driver}</span>
-                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: lg.color }}></div>
+                                                    <span className="font-mono text-white text-[10px]">{tp.driver}</span>
+                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tp.color }}></div>
                                                 </div>
                                             </div>
                                         ))}
@@ -719,11 +721,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                                     src={getDriverImageUrl(t.driverId, race?.year)}
                                                     alt="Driver"
                                                     className="w-full h-full object-cover object-top"
-                                                    onError={(e) => {
-                                                        // Fallback to team logo if driver photo fails
-                                                        e.currentTarget.src = getTeamLogoUrl(t.id, race?.year);
-                                                        e.currentTarget.className = "w-full h-full object-contain p-1";
-                                                    }}
+                                                    onError={handleImageFallback}
                                                 />
                                             </div>
                                             <div className="flex-1 max-w-[140px]">

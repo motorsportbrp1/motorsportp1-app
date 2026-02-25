@@ -5,7 +5,7 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
+import { handleImageFallback, getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
 
 
 
@@ -368,14 +368,14 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                                     <div className="flex items-center gap-1.5 mt-1">
                                                         {driverLeader.team && (
                                                             <div className="size-4 rounded overflow-hidden shrink-0">
-                                                                <img src={getTeamLogoUrl(driverLeader.team, parseInt(year))} alt="" className="w-full h-full object-contain filter" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                                <img src={getTeamLogoUrl(driverLeader.team, parseInt(year))} alt="" className="w-full h-full object-contain filter" onError={handleImageFallback} />
                                                             </div>
                                                         )}
                                                         <p className="text-primary text-sm font-medium">{driverLeader.team}</p>
                                                     </div>
                                                 </div>
                                                 <div className="w-20 h-20 rounded-full bg-surface-darker border border-white/10 overflow-hidden shadow-lg mt-1">
-                                                    <img alt={driverLeader.name} className="w-full h-full object-cover object-top" src={driverLeader.image} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                                                    <img alt={driverLeader.name} className="w-full h-full object-cover object-top" src={driverLeader.image} onError={handleImageFallback} />
                                                     <div className="hidden w-full h-full flex flex-col items-center justify-center text-white font-bold text-2xl">{driverLeader.name?.[0]}</div>
                                                 </div>
                                             </div>
@@ -388,7 +388,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                             <div className="flex items-center gap-3">
                                                 <div className="size-14 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/5 shadow-sm">
                                                     {constructorLeader.id ? (
-                                                        <img src={getTeamLogoUrl(constructorLeader.id, parseInt(year))} alt="" className="w-full h-full object-contain p-2 drop-shadow-sm filter scale-[1.0]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                        <img src={getTeamLogoUrl(constructorLeader.id, parseInt(year))} alt="" className="w-full h-full object-contain p-2 drop-shadow-sm filter scale-[1.0]" onError={handleImageFallback} />
                                                     ) : (
                                                         <span className="material-symbols-outlined text-white">sports_motorsports</span>
                                                     )}
@@ -414,7 +414,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                                 <div className="flex items-center gap-3">
                                                     {biggestWinner.image && (
                                                         <div className="size-10 rounded-full overflow-hidden bg-surface-darker border border-white/10 shrink-0">
-                                                            <img src={biggestWinner.image} alt={biggestWinner.name} className="w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                            <img src={biggestWinner.image} alt={biggestWinner.name} className="w-full h-full object-cover object-top" onError={handleImageFallback} />
                                                         </div>
                                                     )}
                                                     <div>
@@ -441,7 +441,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                                 <div className="flex items-center gap-3">
                                                     {polesLeader.image && (
                                                         <div className="size-10 rounded-full overflow-hidden bg-surface-darker border border-white/10 shrink-0">
-                                                            <img src={polesLeader.image} alt={polesLeader.name} className="w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                            <img src={polesLeader.image} alt={polesLeader.name} className="w-full h-full object-cover object-top" onError={handleImageFallback} />
                                                         </div>
                                                     )}
                                                     <div>
@@ -523,7 +523,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                                                                 <span className="text-sm text-white font-medium">{race.winner}</span>
                                                                 {race.winnerTeam && (
                                                                     <div className="size-4 rounded overflow-hidden">
-                                                                        <img src={getTeamLogoUrl(race.winnerTeam, parseInt(year))} alt="" className="w-full h-full object-contain filter" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                                        <img src={getTeamLogoUrl(race.winnerTeam, parseInt(year))} alt="" className="w-full h-full object-contain filter" onError={handleImageFallback} />
                                                                     </div>
                                                                 )}
                                                             </div>

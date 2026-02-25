@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from app.services.session_service import get_stints, get_all_laps, get_speed_traps, get_minisectors, get_best_sectors
+from app.services.session_service import get_stints, get_all_laps, get_speed_traps, get_minisectors, get_best_sectors, get_fastf1_summary_data
 from app.core.job_manager import create_job, run_async_job
 
 router = APIRouter(prefix="/sessions", tags=["FastF1 Sessions"])
@@ -76,6 +76,18 @@ def get_session_best_sectors(year: int, round: int, session_name: str):
     """
     try:
         sectors = get_best_sectors(year, round, session_name)
-        return {"best_sectors": sectors}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/{year}/{round}/{session_name}/fastf1-summary")
+def get_fastf1_summary(year: int, round: int, session_name: str):
+    """
+    Get stints, speed traps, minisectors, and best sectors in a single request,
+    parsing the FastF1 session exactly once.
+    """
+    try:
+        summary_data = get_fastf1_summary_data(year, round, session_name)
+        return summary_data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
