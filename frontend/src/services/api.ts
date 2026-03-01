@@ -1,8 +1,13 @@
 import axios from 'axios';
 
 // Create a configured Axios instance
+const envUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const formattedBaseUrl = envUrl.endsWith('/api/v1')
+    ? envUrl
+    : `${envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl}/api/v1`;
+
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1',
+    baseURL: formattedBaseUrl,
     timeout: 15000,
     headers: {
         'Content-Type': 'application/json',

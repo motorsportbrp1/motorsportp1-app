@@ -181,7 +181,10 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
 
             setFastf1Loading(true);
             try {
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+                let baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+                if (!baseUrl.endsWith('/api/v1')) {
+                    baseUrl = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/api/v1`;
+                }
 
                 const response = await fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/fastf1-summary`);
                 if (response.ok) {
