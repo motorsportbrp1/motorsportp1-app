@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
-import { handleImageFallback, getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
+import { handleImageFallback, getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl, getTireImageUrl } from "@/lib/utils";
 
 // Types
 type SessionType = 'fp1' | 'fp2' | 'fp3' | 'sprint_quali' | 'sprint' | 'qualifying' | 'race';
@@ -354,6 +354,70 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
 
     }, [minisectorsData, currentResults, raceResults]);
 
+    const parseTimeToMs = (timeString: string) => {
+        if (!timeString || timeString === "\\N") return null;
+        const parts = timeString.split(':');
+        if (parts.length === 2) {
+            const minutes = parseInt(parts[0], 10);
+            const secondsAndMs = parseFloat(parts[1]);
+            return Math.round((minutes * 60 + secondsAndMs) * 1000);
+        } else if (parts.length === 1 && parts[0].includes('.')) {
+            return Math.round(parseFloat(parts[0]) * 1000);
+        }
+        return null;
+    };
+
+    const formatGapStr = (diffMs: number) => {
+        if (diffMs <= 0) return "";
+        const secs = diffMs / 1000;
+        return `+${secs.toFixed(3)}`;
+    };
+
+    const qualiSessionStats = React.useMemo(() => {
+        if (activeTab !== 'qualifying' && activeTab !== 'sprint_quali') return null;
+
+        let bestQ1Ms = Infinity;
+        let bestQ2Ms = Infinity;
+        let bestQ3Ms = Infinity;
+
+        const q1Times: { drv: string; ms: number; str: string }[] = [];
+        const q2Times: { drv: string; ms: number; str: string }[] = [];
+        const q3Times: { drv: string; ms: number; str: string }[] = [];
+
+        currentResults.forEach(d => {
+            const q1Ms = parseTimeToMs(d.q1);
+            if (q1Ms) {
+                if (q1Ms < bestQ1Ms) bestQ1Ms = q1Ms;
+                q1Times.push({ drv: d.driverid, ms: q1Ms, str: d.q1 });
+            }
+            const q2Ms = parseTimeToMs(d.q2);
+            if (q2Ms) {
+                if (q2Ms < bestQ2Ms) bestQ2Ms = q2Ms;
+                q2Times.push({ drv: d.driverid, ms: q2Ms, str: d.q2 });
+            }
+            const q3Ms = parseTimeToMs(d.q3);
+            if (q3Ms) {
+                if (q3Ms < bestQ3Ms) bestQ3Ms = q3Ms;
+                q3Times.push({ drv: d.driverid, ms: q3Ms, str: d.q3 });
+            }
+        });
+
+        q1Times.sort((a, b) => a.ms - b.ms);
+        q2Times.sort((a, b) => a.ms - b.ms);
+        q3Times.sort((a, b) => a.ms - b.ms);
+
+        const q1Map = new Map();
+        q1Times.forEach((t, i) => q1Map.set(t.drv, { pos: i + 1, diff: t.ms - bestQ1Ms, isBest: i === 0 }));
+
+        const q2Map = new Map();
+        q2Times.forEach((t, i) => q2Map.set(t.drv, { pos: i + 1, diff: t.ms - bestQ2Ms, isBest: i === 0 }));
+
+        const q3Map = new Map();
+        q3Times.forEach((t, i) => q3Map.set(t.drv, { pos: i + 1, diff: t.ms - bestQ3Ms, isBest: i === 0 }));
+
+        return { q1Map, q2Map, q3Map };
+    }, [currentResults, activeTab]);
+
     // sectorDominanceLegend removed in favor of direct trackPaths mapping
     if (loading) {
         return (
@@ -430,7 +494,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                 </div>
 
                 {/* Grid Principal Layout */}
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                <div className="grid grid-cols-1 xl:grid-cols-11 gap-4">
 
                     {/* Coluna Esquerda: Tabela e Long Run */}
                     <div className="xl:col-span-8 flex flex-col gap-8">
@@ -465,11 +529,21 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                             <th className="py-4 text-center w-12">Pos</th>
                                             <th className="py-4 pl-4">Driver</th>
                                             <th className="py-4">Team</th>
-                                            <th className="py-4">Time</th>
-                                            <th className="py-4">Gap</th>
-                                            <th className="py-4 text-center">Laps</th>
-                                            <th className="py-4 text-center">Tire</th>
-                                            <th className="py-4 text-center hidden md:table-cell">Sectors</th>
+                                            {activeTab === 'qualifying' || activeTab === 'sprint_quali' ? (
+                                                <>
+                                                    <th className="py-4 pr-4 text-right">{activeTab === 'sprint_quali' ? 'SQ1' : 'Q1'}</th>
+                                                    <th className="py-4 pr-4 text-right">{activeTab === 'sprint_quali' ? 'SQ2' : 'Q2'}</th>
+                                                    <th className="py-4 pr-4 text-right">{activeTab === 'sprint_quali' ? 'SQ3' : 'Q3'}</th>
+                                                    <th className="py-4 text-center">Tire</th>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <th className="py-4 text-left min-w-[200px] pl-4">Tires</th>
+                                                    <th className="py-4 text-left pl-6">Gap</th>
+                                                    <th className="py-4 text-left">Interval</th>
+                                                    <th className="py-4 text-center hidden md:table-cell">Fastest Lap</th>
+                                                </>
+                                            )}
                                         </tr>
                                     </thead>
                                     <tbody className="text-sm divide-y divide-[#303238]">
@@ -497,8 +571,11 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                             const s3Color = drvSectors ? getSectorColor(drvSectors.s3_color) : "bg-[#303238]";
 
                                             const posText = d.positiontext || d.positionnumber?.toString() || '-';
+                                            const posGained = d.positionsgained ? parseInt(d.positionsgained) : 0;
 
                                             const isQuali = activeTab === 'qualifying' || activeTab === 'sprint_quali';
+                                            const isRace = activeTab === 'race' || activeTab === 'sprint';
+
                                             let rawTime = d.time;
                                             let eliminatedStatus = null;
 
@@ -516,14 +593,23 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
 
                                             let displayTime = rawTime !== "\\N" && rawTime ? rawTime : '-';
                                             let gapText = idx === 0 ? "-" : (d.gap || d.reasonretired || '-');
-
                                             if (gapText === "\\N") gapText = '-';
+
+                                            let intervalText = idx === 0 ? "-" : (d.interval || '-');
+                                            if (intervalText === "\\N" || intervalText === "0.000") intervalText = gapText !== '-' ? gapText : '-';
 
                                             return (
                                                 <tr key={idx} className="group hover:bg-[#2a2b30] transition-colors">
                                                     <td className="py-3 text-center font-bold text-white relative">
                                                         <div className="absolute left-0 top-0 bottom-0 w-1 rounded-r" style={{ backgroundColor: d.constructorColor }}></div>
-                                                        {posText}
+                                                        <div className="flex items-center justify-center gap-1.5">
+                                                            <span>{posText}</span>
+                                                            {isRace && posGained !== 0 && (
+                                                                <span className={`text-[9px] font-bold ${posGained > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                                    {posGained > 0 ? `+${posGained}` : posGained}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="py-3 font-bold text-white px-4">
                                                         <div className="flex items-center gap-3">
@@ -535,7 +621,8 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                                                     onError={handleImageFallback}
                                                                 />
                                                             </div>
-                                                            {d.driverName} {!d.driverName?.includes(d.driverLastName) && d.driverLastName ? ` ${d.driverLastName}` : ''}
+                                                            {/* All sessions will use abbreviated names (e.g. M. Verstappen) */}
+                                                            <span>{d.driverName?.charAt(0)}. {d.driverLastName}</span>
                                                         </div>
                                                     </td>
                                                     <td className="py-3 text-slate-400 text-xs">
@@ -548,35 +635,98 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                                                             <span className="truncate">{d.constructorName}</span>
                                                         </div>
                                                     </td>
-                                                    <td className={`py-3 font-mono ${idx === 0 ? 'text-[#e81932] font-bold' : 'text-slate-300'}`}>
-                                                        <div className="flex items-center gap-2">
-                                                            <span>{displayTime}</span>
-                                                            {eliminatedStatus && (
-                                                                <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-widest ${eliminatedStatus.includes('1')
-                                                                    ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                                                    : 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
-                                                                    }`}>
-                                                                    Out {eliminatedStatus}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3 text-slate-500 font-mono text-xs">
-                                                        {gapText}
-                                                    </td>
-                                                    <td className="py-3 text-center text-white font-mono text-xs">
-                                                        {d.laps || lastStint?.laps || (20 + (idx % 8))}
-                                                    </td>
-                                                    <td className="py-3 flex justify-center">
-                                                        <div className={tireClass}></div>
-                                                    </td>
-                                                    <td className="py-3 hidden md:table-cell">
-                                                        <div className="flex justify-center gap-1.5">
-                                                            <div className={`w-6 h-1 ${s1Color} rounded-full`}></div>
-                                                            <div className={`w-6 h-1 ${s2Color} rounded-full`}></div>
-                                                            <div className={`w-6 h-1 ${s3Color} rounded-full`}></div>
-                                                        </div>
-                                                    </td>
+                                                    {isQuali && qualiSessionStats ? (
+                                                        <>
+                                                            <td className="py-1 text-right pr-4 font-mono">
+                                                                {d.q1 && d.q1 !== "\\N" ? (
+                                                                    <div className="flex flex-col items-end gap-0.5 mt-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`text-[9px] font-bold ${qualiSessionStats.q1Map.get(d.driverid)?.pos === 1 ? 'text-[#a855f7]' : 'text-slate-500'}`}>P{qualiSessionStats.q1Map.get(d.driverid)?.pos || '-'}</span>
+                                                                            <span className={`text-xs ${qualiSessionStats.q1Map.get(d.driverid)?.pos === 1 ? 'text-[#a855f7] font-bold' : 'text-slate-300 font-bold'}`}>{d.q1}</span>
+                                                                        </div>
+                                                                        {qualiSessionStats.q1Map.get(d.driverid)?.diff > 0 ? (
+                                                                            <span className="text-[9px] text-slate-500">{formatGapStr(qualiSessionStats.q1Map.get(d.driverid)?.diff)}</span>
+                                                                        ) : (
+                                                                            <span className="text-[9px] text-transparent">0</span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-slate-600 text-[10px] font-bold text-right block w-full mt-2">N/A</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="py-1 text-right pr-4 font-mono">
+                                                                {d.q2 && d.q2 !== "\\N" ? (
+                                                                    <div className="flex flex-col items-end gap-0.5 mt-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`text-[9px] font-bold ${qualiSessionStats.q2Map.get(d.driverid)?.pos === 1 ? 'text-[#a855f7]' : 'text-slate-500'}`}>P{qualiSessionStats.q2Map.get(d.driverid)?.pos || '-'}</span>
+                                                                            <span className={`text-xs ${qualiSessionStats.q2Map.get(d.driverid)?.pos === 1 ? 'text-[#a855f7] font-bold' : 'text-slate-300 font-bold'}`}>{d.q2}</span>
+                                                                        </div>
+                                                                        {qualiSessionStats.q2Map.get(d.driverid)?.diff > 0 ? (
+                                                                            <span className="text-[9px] text-slate-500">{formatGapStr(qualiSessionStats.q2Map.get(d.driverid)?.diff)}</span>
+                                                                        ) : (
+                                                                            <span className="text-[9px] text-transparent">0</span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-slate-600 text-[10px] font-bold text-right block w-full mt-2">N/A</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="py-1 text-right pr-4 font-mono">
+                                                                {d.q3 && d.q3 !== "\\N" ? (
+                                                                    <div className="flex flex-col items-end gap-0.5 mt-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`text-[9px] font-bold opacity-0`}>P1</span>
+                                                                            <span className={`text-xs ${qualiSessionStats.q3Map.get(d.driverid)?.pos === 1 ? 'text-[#a855f7] font-bold' : 'text-slate-100 font-bold'}`}>{d.q3}</span>
+                                                                        </div>
+                                                                        {qualiSessionStats.q3Map.get(d.driverid)?.diff > 0 ? (
+                                                                            <span className="text-[9px] text-slate-500">{formatGapStr(qualiSessionStats.q3Map.get(d.driverid)?.diff)}</span>
+                                                                        ) : (
+                                                                            <span className="text-[9px] text-transparent">0</span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-slate-600 text-[10px] font-bold text-right block w-full mt-2">N/A</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="py-3 flex justify-center">
+                                                                <img src={getTireImageUrl(compound)} alt={compound} className="w-6 h-6 drop-shadow-md" title={compound} />
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <td className="py-3 hidden md:table-cell pl-4 align-top pt-4">
+                                                                <div className="flex justify-start items-center gap-1.5 flex-wrap">
+                                                                    {driverStints.length > 0 ? (
+                                                                        driverStints.map((st, sidx) => {
+                                                                            const comp = st.compound?.toUpperCase() || "SOFT";
+                                                                            return (
+                                                                                <React.Fragment key={sidx}>
+                                                                                    {sidx > 0 && <span className="text-slate-500 mx-1 text-[11px] font-medium tracking-tighter">→</span>}
+                                                                                    <div className="relative inline-flex items-center justify-center">
+                                                                                        <img src={getTireImageUrl(comp)} alt={comp} className="w-6 h-6 shrink-0 drop-shadow-md" title={`${comp} - ${st.laps} Laps`} />
+                                                                                        <div className="absolute -top-1.5 -right-1.5 bg-[#1a1b1e] text-white text-[9px] font-bold leading-none px-1 py-[3px] rounded-md flex items-center justify-center border border-slate-700/50 min-w-[16px] shadow-sm">
+                                                                                            {st.laps}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </React.Fragment>
+                                                                            );
+                                                                        })
+                                                                    ) : (
+                                                                        <img src={getTireImageUrl(compound)} alt={compound} className="w-6 h-6 drop-shadow-md" title={compound} />
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-3 text-slate-300 font-mono text-xs pl-6">
+                                                                {gapText}
+                                                            </td>
+                                                            <td className="py-3 text-slate-500 font-mono text-xs">
+                                                                {intervalText}
+                                                            </td>
+                                                            <td className="py-3 text-center text-slate-300 font-mono text-xs hidden md:table-cell">
+                                                                {d.fastestlap && d.fastestlap !== "\\N" ? d.fastestlap : '-'}
+                                                            </td>
+                                                        </>
+                                                    )}
                                                 </tr>
                                             );
                                         })}
@@ -653,49 +803,63 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                     </div>
 
                     {/* Right column */}
-                    <div className="xl:col-span-4 flex flex-col gap-8">
+                    <div className="xl:col-span-3 flex flex-col gap-8">
 
                         {/* Domínio de Setor */}
                         <div className="bg-[#232429] border border-[#303238] rounded-2xl flex flex-col overflow-hidden shadow-xl">
                             <div className="p-5 border-b border-[#303238]">
                                 <h3 className="text-sm font-bold text-white uppercase tracking-widest">Sector Dominance</h3>
                             </div>
-                            <div className="relative p-6 h-64 flex items-center justify-center bg-[#1a1b1e]">
-                                {fastf1Loading ? (
-                                    <div className="text-center text-slate-500 font-mono text-xs animate-pulse tracking-widest uppercase">
-                                        Loading Track Data...
-                                    </div>
-                                ) : trackPaths ? (
-                                    <svg className="w-full h-full drop-shadow-2xl opacity-90" viewBox="0 0 200 200">
-                                        {trackPaths.map((tp: any) => (
-                                            <path
-                                                key={tp.id}
-                                                d={tp.pathData}
-                                                fill="none"
-                                                stroke={tp.color}
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth="4"
-                                            />
-                                        ))}
-                                    </svg>
-                                ) : (
-                                    <div className="text-center text-slate-500 font-mono text-xs tracking-widest uppercase">
-                                        No Track Data Available
-                                    </div>
-                                )}
+                            <div className="p-6 bg-[#1a1b1e] flex flex-col gap-6">
+                                <div className="h-56 flex items-center justify-center">
+                                    {fastf1Loading ? (
+                                        <div className="text-center text-slate-500 font-mono text-xs animate-pulse tracking-widest uppercase">
+                                            Loading Track Data...
+                                        </div>
+                                    ) : trackPaths ? (
+                                        <svg className="h-full drop-shadow-2xl opacity-90" viewBox="0 0 200 200">
+                                            {trackPaths.map((tp: any) => (
+                                                <path
+                                                    key={tp.id}
+                                                    d={tp.pathData}
+                                                    fill="none"
+                                                    stroke={tp.color}
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth="4"
+                                                />
+                                            ))}
+                                        </svg>
+                                    ) : (
+                                        <div className="text-center text-slate-500 font-mono text-xs tracking-widest uppercase">
+                                            No Track Data Available
+                                        </div>
+                                    )}
+                                </div>
 
                                 {trackPaths && !fastf1Loading && (
-                                    <div className="absolute bottom-4 left-4 right-4 space-y-3">
-                                        {trackPaths.map((tp: any) => (
-                                            <div key={tp.id} className="flex justify-between items-center text-xs">
-                                                <span className="text-slate-500 uppercase font-bold tracking-widest text-[9px]">Sector {tp.id}</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono text-white text-[10px]">{tp.driver}</span>
-                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tp.color }}></div>
+                                    <div className="space-y-4 px-2">
+                                        {trackPaths.map((tp: any) => {
+                                            // Find the actual sector time for this driver/sector
+                                            const sectorData = bestSectorsData.find(s => s.driver === tp.driver);
+                                            let sectorTime = "";
+                                            if (sectorData) {
+                                                if (tp.id === 1 && sectorData.s1) sectorTime = sectorData.s1.toFixed(3);
+                                                if (tp.id === 2 && sectorData.s2) sectorTime = sectorData.s2.toFixed(3);
+                                                if (tp.id === 3 && sectorData.s3) sectorTime = sectorData.s3.toFixed(3);
+                                            }
+
+                                            return (
+                                                <div key={tp.id} className="flex justify-between items-center">
+                                                    <span className="text-[#64748B] font-bold uppercase tracking-[0.15em] text-[10px]">Sector {tp.id}</span>
+                                                    <div className="flex items-center gap-3">
+                                                        {sectorTime && <span className="text-[11px] text-[#CBD5E1] font-mono tracking-widest">{sectorTime}s</span>}
+                                                        <span className="font-bold text-white text-[11px] tracking-widest uppercase">{tp.driver}</span>
+                                                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tp.color }}></div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

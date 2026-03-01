@@ -285,32 +285,45 @@ export function getDriverImageUrl(driverId: string, fallbackYear?: number): stri
 
     // Specific logic for drivers with multiple known years
     const specialAssets: Record<string, number[]> = {
-        "fernando-alonso": [2005, 2006, 2022, 2025, 2026],
-        "lewis-hamilton": [2022, 2025, 2026],
-        "max-verstappen": [2025, 2026],
-        "michael-schumacher": [2006, 2012],
-        "ayrton-senna": [1994],
         "alain-prost": [1993],
-        "oscar-piastri": [2026],
-        "george-russell": [2025, 2026],
+        "alexander-albon": [2025],
+        "arvid-lindblad": [2026],
+        "ayrton-senna": [1994],
+        "carlos-sainz": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+        "carlos-sainz-jr": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+        "charles-leclerc": [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
+        "daniel-ricciardo": [2011, 2020, 2021, 2022, 2023],
+        "emerson-fittipaldi": [1975],
+        "esteban-ocon": [2022, 2023, 2026],
+        "fernando-alonso": [2005, 2006, 2010, 2014, 2015, 2017, 2021, 2022, 2023, 2024, 2025],
+        "franco-colapinto": [2025],
+        "gabriel-bortoleto": [2025],
+        "george-russell": [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
+        "guanyu-zhou": [2023],
+        "isack-hadjar": [2025],
+        "jack-doohan": [2025],
+        "juan-manuel-fangio": [1950],
         "kimi-antonelli": [2025, 2026],
-        "lance-stroll": [2025, 2026],
-        "liam-lawson": [2025, 2026],
-        "charles-leclerc": [2025, 2026],
-        "lando-norris": [2025, 2026],
-        "carlos-sainz": [2025, 2026],
-        "carlos-sainz-jr": [2025, 2026],
-        "alexander-albon": [2025, 2026],
-        "yuki-tsunoda": [2025, 2026],
-        "esteban-ocon": [2022, 2025, 2026],
-        "pierre-gasly": [2025, 2026],
-        "jack-doohan": [2025, 2026],
-        "nico-hulkenberg": [2025, 2026],
-        "gabriel-bortoleto": [2025, 2026],
-        "isack-hadjar": [2025, 2026],
-        "franco-colapinto": [2025, 2026],
-        "oliver-bearman": [2025, 2026],
-        "arvid-lindblad": [2025, 2026]
+        "kimi-raikkonen": [2007, 2015, 2016, 2019, 2020, 2021],
+        "lance-stroll": [2019, 2020, 2021, 2022, 2023, 2024, 2025],
+        "lando-norris": [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
+        "lewis-hamilton": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
+        "liam-lawson": [2026],
+        "martin-brundle": [1996],
+        "max-verstappen": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
+        "michael-schumacher": [2006, 2012],
+        "michele-alboreto": [1986],
+        "nico-hulkenberg": [2015, 2019, 2020, 2023, 2024, 2025],
+        "nico-rosberg": [2016],
+        "oliver-bearman": [2024, 2025],
+        "oscar-piastri": [2026],
+        "pierre-gasly": [2023],
+        "sebastian-vettel": [2022],
+        "sergio-perez": [2023],
+        "stefan-johansson": [1986],
+        "valtteri-bottas": [2023, 2024],
+        "yuki-tsunoda": [2021, 2022, 2023, 2024, 2025],
+        "zhou-guanyu": [2023]
     };
 
     let filename = "2026.webp"; // Default
@@ -416,4 +429,25 @@ export function handleImageFallback(e: React.SyntheticEvent<HTMLImageElement, Ev
             img.nextElementSibling.classList.remove('hidden');
         }
     }
+}
+
+/**
+ * Get Tire Image URL from Supabase Storage
+ */
+export function getTireImageUrl(compound: TyreCompound | string): string {
+    const isProd = process.env.NODE_ENV === 'production';
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
+    const localBackendUrl = "http://localhost:8000";
+
+    const rootUrl = isProd ? `${supabaseUrl}/storage/v1/object/public/f1-media` : `${localBackendUrl}/media`;
+
+    const c = compound.toLowerCase();
+    let filename = "pirelli-soft.svg";
+    if (c.includes("soft")) filename = "pirelli-soft.svg";
+    else if (c.includes("medium")) filename = "pirelli-medium.svg";
+    else if (c.includes("hard")) filename = "pirelli-hard.svg";
+    else if (c.includes("inter")) filename = "pirelli-inter.svg";
+    else if (c.includes("wet")) filename = "pirelli-wet.svg";
+
+    return `${rootUrl}/tires/${filename}`;
 }

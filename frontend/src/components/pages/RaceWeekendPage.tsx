@@ -196,7 +196,7 @@ export default function RaceWeekendPage() {
                     </div>
 
                     {/* Right column */}
-                    <div className="xl:col-span-4 flex flex-col gap-8">
+                    <div className="xl:col-span-3 flex flex-col gap-8">
 
                         {/* Domínio de Setor */}
                         <div className="bg-[#232429] border border-[#303238] rounded-2xl flex flex-col overflow-hidden shadow-xl">
