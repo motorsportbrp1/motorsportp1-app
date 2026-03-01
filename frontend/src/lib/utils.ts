@@ -442,12 +442,12 @@ export function getTireImageUrl(compound: TyreCompound | string): string {
     const rootUrl = isProd ? `${supabaseUrl}/storage/v1/object/public/f1-media` : `${localBackendUrl}/media`;
 
     const c = compound.toLowerCase();
-    let filename = "pirelli-soft.svg";
-    if (c.includes("soft")) filename = "pirelli-soft.svg";
-    else if (c.includes("medium")) filename = "pirelli-medium.svg";
-    else if (c.includes("hard")) filename = "pirelli-hard.svg";
-    else if (c.includes("inter")) filename = "pirelli-inter.svg";
-    else if (c.includes("wet")) filename = "pirelli-wet.svg";
+    let filename = "pirelli-soft.png";
+    if (c.includes("soft")) filename = "pirelli-soft.png";
+    else if (c.includes("medium")) filename = "pirelli-medium.png";
+    else if (c.includes("hard")) filename = "pirelli-hard.png";
+    else if (c.includes("inter")) filename = "pirelli-inter.png";
+    else if (c.includes("wet")) filename = "pirelli-wet.png";
 
     return `${rootUrl}/tires/${filename}`;
 }
