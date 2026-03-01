@@ -1,0 +1,18 @@
+{
+    "HomePage": {
+        "title": "Next Race"
+    },
+    "Navigation": {
+        "home": "Home",
+        "seasons": "Seasons",
+        "drivers": "Drivers",
+        "teams": "Teams",
+        "analysis": "Analysis",
+        "live": "Live",
+        "races": "Races",
+        "standings": "Standings",
+        "news": "News",
+        "store": "Store",
+        "admin": "Admin"
+    }
+}

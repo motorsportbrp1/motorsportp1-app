@@ -366,11 +366,13 @@ export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'sea
         else if (normalizedId === 'rb' || normalizedId === 'racing_bulls' || normalizedId === 'racing-bulls') normalizedId = 'racingbulls';
     }
 
+    const cacheBuster = filename.toLowerCase().endsWith('.svg') ? '?v=2' : '';
+
     if (type === 'circuit-layouts' || type === 'homepage') {
-        return `${rootUrl}/${type}/${filename}`;
+        return `${rootUrl}/${type}/${filename}${cacheBuster}`;
     }
 
-    return `${rootUrl}/${type}/${normalizedId}/${filename}`;
+    return `${rootUrl}/${type}/${normalizedId}/${filename}${cacheBuster}`;
 }
 
 /**
@@ -449,5 +451,6 @@ export function getTireImageUrl(compound: TyreCompound | string): string {
     else if (c.includes("inter")) filename = "pirelli-inter.svg";
     else if (c.includes("wet")) filename = "pirelli-wet.svg";
 
-    return `${rootUrl}/tires/${filename}`;
+    const cacheBuster = filename.toLowerCase().endsWith('.svg') ? '?v=2' : '';
+    return `${rootUrl}/tires/${filename}${cacheBuster}`;
 }

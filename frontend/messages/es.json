@@ -1,0 +1,18 @@
+{
+    "HomePage": {
+        "title": "Próxima Carrera"
+    },
+    "Navigation": {
+        "home": "Inicio",
+        "seasons": "Temporadas",
+        "drivers": "Pilotos",
+        "teams": "Equipos",
+        "analysis": "Análisis",
+        "live": "En Vivo",
+        "races": "Carreras",
+        "standings": "Clasificación",
+        "news": "Noticias",
+        "store": "Tienda",
+        "admin": "Admin"
+    }
+}

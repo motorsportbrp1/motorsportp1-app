@@ -1,19 +1,21 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-
-const NAV_LINKS = [
-    { href: "/", label: "Home" },
-    { href: "/seasons", label: "Temporadas" },
-    { href: "/drivers", label: "Pilotos" },
-    { href: "/teams", label: "Equipes" },
-    { href: "/analysis", label: "Análise" },
-    { href: "/analysis/live", label: "Live", isLive: true },
-];
+import { Link, usePathname } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
+import LanguageSwitcher from "./LanguageSwitcher";
 
 export default function Header() {
+    const t = useTranslations('Navigation');
     const pathname = usePathname();
+
+    const NAV_LINKS = [
+        { href: "/", label: t('home') },
+        { href: "/seasons", label: t('seasons') },
+        { href: "/drivers", label: t('drivers') },
+        { href: "/teams", label: t('teams') },
+        { href: "/analysis", label: t('analysis') },
+        { href: "/analysis/live", label: t('live'), isLive: true },
+    ];
 
     return (
         <header
@@ -69,6 +71,7 @@ export default function Header() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
+                        <LanguageSwitcher />
                         <button className="hover:text-white transition-colors relative" style={{ color: "#94a3b8" }}>
                             <span className="material-symbols-outlined">notifications</span>
                             <span className="absolute top-0 right-0 h-2 w-2 rounded-full" style={{ background: "var(--primary)", boxShadow: "0 0 0 2px var(--surface)" }} />
