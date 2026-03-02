@@ -38,7 +38,18 @@ def upload_images():
             # So ./media/drivers/lewis-hamilton/2025.png => drivers/lewis-hamilton/2025.png
             relative_path = os.path.relpath(local_path, MEDIA_DIR).replace("\\", "/")
             
-            print(f"Subindo {relative_path}...")
+            import mimetypes
+
+            content_type, _ = mimetypes.guess_type(local_path)
+            if not content_type:
+                if file.lower().endswith('.svg'):
+                    content_type = "image/svg+xml"
+                elif file.lower().endswith('.webp'):
+                    content_type = "image/webp"
+                else:
+                    content_type = "application/octet-stream"
+
+            print(f"Subindo {relative_path} (Type: {content_type})...")
             
             with open(local_path, "rb") as f:
                 # Upsert is True so if you update an image, it replaces it
@@ -47,7 +58,7 @@ def upload_images():
                     res = supabase.storage.from_(BUCKET_NAME).upload(
                         path=relative_path,
                         file=f,
-                        file_options={"cacheControl": "3600", "upsert": "false"}
+                        file_options={"cacheControl": "3600", "upsert": "false", "contentType": content_type}
                     )
                     uploaded += 1
                     print(f"✅ {relative_path} salvo com sucesso!")
