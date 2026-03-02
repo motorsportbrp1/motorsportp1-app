@@ -378,15 +378,32 @@ export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'sea
  */
 export function getSeasonCardImageUrl(year: number): string {
     const KNOWN_CARDS: Record<number, string> = {
+        1950: "1950-season-farina.webp",
+        1951: "1951-season-fangio.webp",
+        1994: "1994-season-schumacher.webp",
+        2003: "2003-season-schumacher.jpg",
+        2004: "2004-season-schumacher.jpg",
         2005: "2005-season-alonso.jpg",
         2006: "2006-season-alonso.jpg",
+        2007: "2007-season-raikkonen.jpg",
+        2008: "2008-season-hamilton.webp",
+        2009: "2009-season-button.webp",
+        2010: "2010-season-vettel.jpg",
+        2011: "2011-season-vettel.jpg",
+        2012: "2012-season-vettel.jpg",
+        2013: "2013-season-vettel.jpg",
+        2014: "2014-season-hamilton.webp",
+        2015: "2015-season-hamilton.webp",
+        2016: "2016-season-rosberg.webp",
+        2017: "2017-season-hamilton.jpg",
+        2018: "2018-season-hamilton.jpg",
         2019: "2019-season-hamilton.webp",
         2020: "2020-season-hamilton.jpg",
         2021: "2021-season-verstappen.jpg",
         2022: "2022-season-verstappen.jpg",
         2023: "2023-season-verstappen.jpg",
         2024: "2024-season-verstappen.jpg",
-        2025: "2025-season-norris.jpg"
+        2025: "2025-season-norris.jpg",
     };
 
     if (KNOWN_CARDS[year]) {
