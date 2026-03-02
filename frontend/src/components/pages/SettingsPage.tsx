@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { useTranslations } from "next-intl";
 
 interface FavoriteItem {
     id: string;
@@ -31,8 +32,9 @@ const mockFavorites: FavoriteItem[] = [
 ];
 
 export default function SettingsPage() {
+    const t = useTranslations('SettingsPage');
     const [theme, setTheme] = useState<"dark" | "light">("dark");
-    const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+    const toggleTheme = () => setTheme((thm) => (thm === "dark" ? "light" : "dark"));
     const [favorites, setFavorites] = useState(mockFavorites);
     const [exportFormat, setExportFormat] = useState<"csv" | "json">("csv");
 
@@ -57,9 +59,9 @@ export default function SettingsPage() {
                             size={24}
                             style={{ color: "var(--f1-red)", display: "inline", verticalAlign: "middle", marginRight: 8 }}
                         />
-                        Settings
+                        {t('title')}
                     </h1>
-                    <p className="page-subtitle">Manage preferences, favorites, and data sources</p>
+                    <p className="page-subtitle">{t('subtitle')}</p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -68,7 +70,7 @@ export default function SettingsPage() {
                         <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-primary)" }}>
                             <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
                                 <Palette size={16} style={{ color: "var(--accent-purple)" }} />
-                                Appearance
+                                {t('appearance')}
                             </h2>
                         </div>
                         <div className="p-5 space-y-4">
@@ -76,10 +78,10 @@ export default function SettingsPage() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                                        Theme
+                                        {t('theme')}
                                     </p>
                                     <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                        Toggle between dark and light mode
+                                        {t('themeDesc')}
                                     </p>
                                 </div>
                                 <button
@@ -93,11 +95,11 @@ export default function SettingsPage() {
                                 >
                                     {theme === "dark" ? (
                                         <>
-                                            <Moon size={16} /> Dark
+                                            <Moon size={16} /> {t('dark')}
                                         </>
                                     ) : (
                                         <>
-                                            <Sun size={16} /> Light
+                                            <Sun size={16} /> {t('light')}
                                         </>
                                     )}
                                 </button>
@@ -107,10 +109,10 @@ export default function SettingsPage() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                                        Sidebar
+                                        {t('sidebar')}
                                     </p>
                                     <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                        Default sidebar state
+                                        {t('sidebarDesc')}
                                     </p>
                                 </div>
                                 <select
@@ -122,8 +124,8 @@ export default function SettingsPage() {
                                     }}
                                     defaultValue="expanded"
                                 >
-                                    <option value="expanded">Expanded</option>
-                                    <option value="collapsed">Collapsed</option>
+                                    <option value="expanded">{t('expanded')}</option>
+                                    <option value="collapsed">{t('collapsed')}</option>
                                 </select>
                             </div>
                         </div>
@@ -134,17 +136,17 @@ export default function SettingsPage() {
                         <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-primary)" }}>
                             <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
                                 <Download size={16} style={{ color: "var(--accent-blue)" }} />
-                                Export Preferences
+                                {t('exportPreferences')}
                             </h2>
                         </div>
                         <div className="p-5 space-y-4">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                                        Default Format
+                                        {t('defaultFormat')}
                                     </p>
                                     <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                        Preferred export format for data
+                                        {t('defaultFormatDesc')}
                                     </p>
                                 </div>
                                 <div className="flex gap-1 p-0.5 rounded-lg" style={{ backgroundColor: "var(--bg-tertiary)" }}>
@@ -168,10 +170,10 @@ export default function SettingsPage() {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                                        Chart Export
+                                        {t('chartExport')}
                                     </p>
                                     <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                        Image format for chart exports
+                                        {t('chartExportDesc')}
                                     </p>
                                 </div>
                                 <select
@@ -196,7 +198,7 @@ export default function SettingsPage() {
                         <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-primary)" }}>
                             <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
                                 <Star size={16} style={{ color: "var(--accent-yellow)" }} />
-                                Favorites ({favorites.length})
+                                {t('favorites', { count: favorites.length })}
                             </h2>
                         </div>
                         <div>
@@ -204,7 +206,7 @@ export default function SettingsPage() {
                                 <div className="p-8 text-center">
                                     <Star size={32} style={{ color: "var(--text-tertiary)", margin: "0 auto 8px" }} />
                                     <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                                        No favorites yet
+                                        {t('noFavorites')}
                                     </p>
                                 </div>
                             ) : (
@@ -223,7 +225,7 @@ export default function SettingsPage() {
                                                     {fav.label}
                                                 </p>
                                                 <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-tertiary)" }}>
-                                                    {fav.type}
+                                                    {t(`type${fav.type.charAt(0).toUpperCase() + fav.type.slice(1)}` as any)}
                                                 </p>
                                             </div>
                                         </div>
@@ -251,7 +253,7 @@ export default function SettingsPage() {
                         <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border-primary)" }}>
                             <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
                                 <Database size={16} style={{ color: "var(--accent-green)" }} />
-                                Data Sources
+                                {t('dataSources')}
                             </h2>
                         </div>
                         <div className="p-5 space-y-4">
@@ -273,7 +275,7 @@ export default function SettingsPage() {
                                             color: source.color,
                                         }}
                                     >
-                                        {source.status}
+                                        {source.status === "Mock Data" ? t('mockData') : t('notConnected')}
                                     </span>
                                 </div>
                             ))}

@@ -12,6 +12,7 @@ import {
 } from "@/lib/mock-data/session";
 import { formatLapTime, TEAM_COLORS } from "@/types";
 import { getCompoundColor } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 /* ── Shorthand color helpers ── */
 const C = {
@@ -28,6 +29,7 @@ const C = {
 const AVAILABLE_DRIVERS = mockDriverResults.slice(0, 4);
 
 export default function SessionAnalyzerPage() {
+    const t = useTranslations('SessionAnalyzerPage');
     const [selectedDrivers, setSelectedDrivers] = useState<string[]>(["VER", "NOR", "LEC"]);
     const [activeTab, setActiveTab] = useState<"laps" | "stints" | "position" | "sectors">("laps");
 
@@ -77,7 +79,7 @@ export default function SessionAnalyzerPage() {
                 borderColor: "#2a2a38",
                 textStyle: { color: "#f0f0f5", fontSize: 12 },
                 formatter: (p: { seriesName: string; data: number[] }) => {
-                    return `<b>${p.seriesName}</b><br/>Lap ${p.data[0]}: ${formatLapTime(p.data[1] * 1000)}`;
+                    return `<b>${p.seriesName}</b><br/>${t('lapNum', { num: p.data[0] })}: ${formatLapTime(p.data[1] * 1000)}`;
                 },
             },
             legend: {
@@ -86,7 +88,7 @@ export default function SessionAnalyzerPage() {
             },
             grid: { left: 60, right: 20, top: 40, bottom: 40 },
             xAxis: {
-                name: "Lap",
+                name: t('lap'),
                 nameLocation: "center",
                 nameGap: 28,
                 nameTextStyle: { color: "#6b6b80" },
@@ -95,7 +97,7 @@ export default function SessionAnalyzerPage() {
                 splitLine: { show: false },
             },
             yAxis: {
-                name: "Time (s)",
+                name: t('timeS'),
                 nameTextStyle: { color: "#6b6b80" },
                 axisLine: { lineStyle: { color: "#2a2a38" } },
                 axisLabel: {
@@ -140,7 +142,7 @@ export default function SessionAnalyzerPage() {
             legend: { top: 0, textStyle: { color: "#a0a0b0", fontSize: 12 } },
             grid: { left: 50, right: 20, top: 40, bottom: 40 },
             xAxis: {
-                name: "Lap",
+                name: t('lap'),
                 nameLocation: "center",
                 nameGap: 28,
                 nameTextStyle: { color: "#6b6b80" },
@@ -148,7 +150,7 @@ export default function SessionAnalyzerPage() {
                 axisLabel: { color: "#a0a0b0" },
             },
             yAxis: {
-                name: "Position",
+                name: t('position'),
                 inverse: true,
                 min: 1,
                 max: 10,
@@ -163,10 +165,10 @@ export default function SessionAnalyzerPage() {
 
     // Tab config
     const tabs = [
-        { key: "laps" as const, label: "Lap Times", icon: Timer },
-        { key: "stints" as const, label: "Tyre Strategy", icon: LayoutGrid },
-        { key: "position" as const, label: "Positions", icon: TrendingDown },
-        { key: "sectors" as const, label: "Sector Analysis", icon: BarChart3 },
+        { key: "laps" as const, label: t('tabLapTimes'), icon: Timer },
+        { key: "stints" as const, label: t('tabTyreStrategy'), icon: LayoutGrid },
+        { key: "position" as const, label: t('tabPositions'), icon: TrendingDown },
+        { key: "sectors" as const, label: t('tabSectorAnalysis'), icon: BarChart3 },
     ];
 
     return (
@@ -177,15 +179,15 @@ export default function SessionAnalyzerPage() {
                 <div className="mb-6">
                     <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs uppercase tracking-wider font-bold" style={{ color: C.muted }}>
-                            Round 5 · 2024
+                            {t('round')} 5 · 2024
                         </span>
                         <span style={{ color: C.dimmed }}>·</span>
                         <span className="text-xs font-bold uppercase" style={{ color: C.primary }}>
-                            Race
+                            {t('race')}
                         </span>
                     </div>
-                    <h1 className="text-3xl font-bold text-white tracking-tight mb-2">🇨🇳 Chinese Grand Prix — Session Analyzer</h1>
-                    <p className="text-sm font-medium" style={{ color: C.muted }}>Shanghai International Circuit · 56 Laps</p>
+                    <h1 className="text-3xl font-bold text-white tracking-tight mb-2">{t('title')}</h1>
+                    <p className="text-sm font-medium" style={{ color: C.muted }}>{t('subtitle')}</p>
                 </div>
 
                 {/* Driver Selector */}
@@ -242,7 +244,7 @@ export default function SessionAnalyzerPage() {
                     {activeTab === "laps" && (
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: C.muted }}>
-                                Lap Times — Scatter Plot
+                                {t('scatterPlotTitle')}
                             </h3>
                             <ReactECharts
                                 option={lapTimesOption}
@@ -255,7 +257,7 @@ export default function SessionAnalyzerPage() {
                     {activeTab === "stints" && (
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide mb-4" style={{ color: C.muted }}>
-                                Tyre Strategy Timeline
+                                {t('tyreTimelineTitle')}
                             </h3>
                             <div className="space-y-3">
                                 {selectedDrivers.map((driver) => {
@@ -282,7 +284,7 @@ export default function SessionAnalyzerPage() {
                                                                 color: stint.compound === "HARD" || stint.compound === "MEDIUM" ? "#111" : "#fff",
                                                                 opacity: 0.9,
                                                             }}
-                                                            title={`${stint.compound} · Laps ${stint.startLap}-${stint.endLap} · ${formatLapTime(stint.avgLapTime)}`}
+                                                            title={`${stint.compound} · ${t('lap')} ${stint.startLap}-${stint.endLap} · ${formatLapTime(stint.avgLapTime)}`}
                                                         >
                                                             {stint.compound[0]} ({stint.laps})
                                                         </div>
@@ -296,11 +298,11 @@ export default function SessionAnalyzerPage() {
                                 <div className="flex items-center gap-4 mt-2">
                                     <div className="w-12" />
                                     <div className="flex-1 flex justify-between text-[10px] uppercase font-bold" style={{ color: C.dimmed }}>
-                                        <span>Lap 1</span>
-                                        <span>Lap 14</span>
-                                        <span>Lap 28</span>
-                                        <span>Lap 42</span>
-                                        <span>Lap 56</span>
+                                        <span>{t('lapNum', { num: 1 })}</span>
+                                        <span>{t('lapNum', { num: 14 })}</span>
+                                        <span>{t('lapNum', { num: 28 })}</span>
+                                        <span>{t('lapNum', { num: 42 })}</span>
+                                        <span>{t('lapNum', { num: 56 })}</span>
                                     </div>
                                 </div>
                             </div>
@@ -310,7 +312,7 @@ export default function SessionAnalyzerPage() {
                     {activeTab === "position" && (
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: C.muted }}>
-                                Position Chart
+                                {t('positionChartTitle')}
                             </h3>
                             <ReactECharts
                                 option={positionOption}
@@ -323,17 +325,17 @@ export default function SessionAnalyzerPage() {
                     {activeTab === "sectors" && (
                         <div>
                             <h3 className="text-sm font-bold uppercase tracking-wide mb-4" style={{ color: C.muted }}>
-                                Sector Analysis — Best Sectors
+                                {t('sectorAnalysisTitle')}
                             </h3>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-white">
                                     <thead>
                                         <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                                            <th className="text-left py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>Driver</th>
-                                            <th className="text-right py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>Sector 1</th>
-                                            <th className="text-right py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>Sector 2</th>
-                                            <th className="text-right py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>Sector 3</th>
-                                            <th className="text-right py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>Best Lap</th>
+                                            <th className="text-left py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>{t('driver')}</th>
+                                            <th className="text-right py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>{t('sector1')}</th>
+                                            <th className="text-right py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>{t('sector2')}</th>
+                                            <th className="text-right py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>{t('sector3')}</th>
+                                            <th className="text-right py-3 px-3 font-bold uppercase text-[10px] tracking-wider" style={{ color: C.dimmed }}>{t('bestLap')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -391,17 +393,17 @@ export default function SessionAnalyzerPage() {
                         style={{ borderBottom: `1px solid ${C.border}`, background: "rgba(46,48,54,0.5)" }}
                     >
                         <h3 className="text-sm font-bold uppercase tracking-wide text-white">
-                            Race Results
+                            {t('raceResults')}
                         </h3>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr style={{ borderBottom: `1px solid ${C.border}` }}>
-                                    {["Pos", "Driver", "Team", "Time", "Points"].map((h) => (
+                                    {[t('pos'), t('driver'), t('team'), t('time'), t('points')].map((h) => (
                                         <th
                                             key={h}
-                                            className={`py-3 px-4 font-bold uppercase text-[10px] tracking-wider ${h === "Pos" ? "text-center" : "text-left"}`}
+                                            className={`py-3 px-4 font-bold uppercase text-[10px] tracking-wider ${h === t('pos') ? "text-center" : "text-left"}`}
                                             style={{ color: C.dimmed }}
                                         >
                                             {h}
@@ -411,7 +413,7 @@ export default function SessionAnalyzerPage() {
                             </thead>
                             <tbody>
                                 {mockDriverResults.map((d) => (
-                                        <tr
+                                    <tr
                                         key={d.abbreviation}
                                         className="transition-colors duration-150 hover:bg-white/5"
                                         style={{ borderBottom: `1px solid ${C.border}` }}

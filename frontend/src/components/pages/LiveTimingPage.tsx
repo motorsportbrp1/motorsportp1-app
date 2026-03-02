@@ -7,8 +7,10 @@ import Footer from "@/components/layout/Footer";
 import { getCompoundColor, getCompoundShort } from "@/lib/utils";
 import { fetchReplayData, fetchAvailableRacesForReplay } from "@/lib/supabase-queries";
 import { LiveTimingState, LiveDriver, RaceControlMessage } from "@/types";
+import { useTranslations } from "next-intl";
 
 export default function LiveTimingPage() {
+    const t = useTranslations('LiveTimingPage');
     const [state, setState] = useState<LiveTimingState | null>(null);
     const [availableRaces, setAvailableRaces] = useState<any[]>([]);
     const [selectedRace, setSelectedRace] = useState<{ year: number; round: number } | null>(null);
@@ -59,19 +61,19 @@ export default function LiveTimingPage() {
     // Generate race control messages from result data
     function generateReplayMessages(data: any): RaceControlMessage[] {
         const messages: RaceControlMessage[] = [];
-        messages.push({ utc: new Date().toISOString(), category: "Flag", message: "CHEQUERED FLAG — RACE FINISHED", flag: "CHECKERED" });
+        messages.push({ utc: new Date().toISOString(), category: "Flag", message: t('msgChequeredFlag'), flag: "CHECKERED" });
 
         const retiredDrivers = data.drivers.filter((d: any) => d.retired);
         retiredDrivers.forEach((d: any) => {
-            messages.push({ utc: new Date().toISOString(), category: "CarEvent", message: `${d.abbreviation} — RETIRED`, flag: "YELLOW" });
+            messages.push({ utc: new Date().toISOString(), category: "CarEvent", message: `${d.abbreviation} — ${t('msgRetired')}`, flag: "YELLOW" });
         });
 
         const winner = data.drivers.find((d: any) => d.position === 1);
         if (winner) {
-            messages.push({ utc: new Date().toISOString(), category: "Other", message: `${winner.abbreviation} WINS THE RACE!`, flag: "GREEN" });
+            messages.push({ utc: new Date().toISOString(), category: "Other", message: `${winner.abbreviation} ${t('msgWinsRace')}`, flag: "GREEN" });
         }
-        messages.push({ utc: new Date().toISOString(), category: "Flag", message: "DRS ENABLED", flag: null });
-        messages.push({ utc: new Date().toISOString(), category: "Flag", message: "GREEN FLAG — RACE START", flag: "GREEN" });
+        messages.push({ utc: new Date().toISOString(), category: "Flag", message: t('msgDrsEnabled'), flag: null });
+        messages.push({ utc: new Date().toISOString(), category: "Flag", message: t('msgGreenFlag'), flag: "GREEN" });
         return messages;
     }
 
@@ -108,11 +110,11 @@ export default function LiveTimingPage() {
                                 className="inline"
                                 style={{ color: "var(--f1-red)", verticalAlign: "middle", marginRight: 8 }}
                             />
-                            Race Replay
+                            {t('title')}
                         </h1>
                         <p className="page-subtitle">
-                            {currentRaceLabel?.grands_prix?.name || currentRaceLabel?.officialname || "Select a race"} — Final Classification
-                            {state && ` · ${state.totalLaps} Laps`}
+                            {currentRaceLabel?.grands_prix?.name || currentRaceLabel?.officialname || t('selectRace')} — {t('finalClassification')}
+                            {state && ` · ${state.totalLaps} ${t('laps')}`}
                         </p>
                     </div>
 
@@ -129,7 +131,7 @@ export default function LiveTimingPage() {
                                 }}
                             >
                                 <History size={14} />
-                                {currentRaceLabel?.grands_prix?.name || "Selecionar Corrida"}
+                                {currentRaceLabel?.grands_prix?.name || t('selectRace')}
                                 <ChevronDown size={14} />
                             </button>
                             {showPicker && (
@@ -154,7 +156,7 @@ export default function LiveTimingPage() {
                                         >
                                             <div>
                                                 <div className="font-bold">{race.grands_prix?.name || race.officialname}</div>
-                                                <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>Round {race.round} · {race.year}</div>
+                                                <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>{t('round')} {race.round} · {race.year}</div>
                                             </div>
                                             <span className="text-xs font-mono" style={{ color: "var(--text-tertiary)" }}>{race.date}</span>
                                         </button>
@@ -173,7 +175,7 @@ export default function LiveTimingPage() {
                         >
                             <History size={12} style={{ color: "var(--accent-blue)" }} />
                             <span className="text-xs font-medium" style={{ color: "var(--accent-blue)" }}>
-                                Replay Mode
+                                {t('replayMode')}
                             </span>
                         </div>
                     </div>
@@ -183,7 +185,7 @@ export default function LiveTimingPage() {
                     <div className="flex items-center justify-center py-20">
                         <div className="text-center">
                             <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "var(--f1-red)", borderTopColor: "transparent" }} />
-                            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Carregando dados da corrida...</p>
+                            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t('loadingRace')}</p>
                         </div>
                     </div>
                 ) : state ? (
@@ -200,10 +202,10 @@ export default function LiveTimingPage() {
                                                     backgroundColor: "var(--bg-tertiary)",
                                                 }}
                                             >
-                                                {["Pos", "", "Driver", "Gap", "Int", "Best Lap", "Pits", "Status"].map((h) => (
+                                                {[t('pos'), "", t('driver'), t('gap'), t('int'), t('bestLap'), t('pits'), t('status')].map((h, i) => (
                                                     <th
-                                                        key={h}
-                                                        className={`py-3 px-3 font-medium text-[11px] uppercase tracking-wider ${["Pos", "Pits"].includes(h) ? "text-center" : "text-left"}`}
+                                                        key={i}
+                                                        className={`py-3 px-3 font-medium text-[11px] uppercase tracking-wider ${[t('pos'), t('pits')].includes(h) ? "text-center" : "text-left"}`}
                                                         style={{ color: "var(--text-tertiary)" }}
                                                     >
                                                         {h}
@@ -261,9 +263,9 @@ export default function LiveTimingPage() {
                                                         {driver.retired ? (
                                                             <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase" style={{ backgroundColor: "rgba(239, 68, 68, 0.2)", color: "#ef4444" }}>RET</span>
                                                         ) : driver.position <= 3 ? (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase" style={{ backgroundColor: "rgba(34, 197, 94, 0.2)", color: "#22c55e" }}>PODIUM</span>
+                                                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase" style={{ backgroundColor: "rgba(34, 197, 94, 0.2)", color: "#22c55e" }}>{t('podium')}</span>
                                                         ) : (
-                                                            <span style={{ color: "var(--text-tertiary)" }}>Finished</span>
+                                                            <span style={{ color: "var(--text-tertiary)" }}>{t('finished')}</span>
                                                         )}
                                                     </td>
                                                 </tr>
@@ -279,19 +281,19 @@ export default function LiveTimingPage() {
                             {/* Race Progress */}
                             <div className="card p-5">
                                 <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-                                    Race Summary
+                                    {t('raceSummary')}
                                 </h3>
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-xs" style={{ color: "var(--text-secondary)" }}>
-                                        <span>Completed</span>
-                                        <span>{state.totalLaps} Laps</span>
+                                        <span>{t('completed')}</span>
+                                        <span>{state.totalLaps} {t('laps')}</span>
                                     </div>
                                     <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--bg-tertiary)" }}>
                                         <div className="h-full rounded-full" style={{ width: "100%", background: "var(--gradient-primary)" }} />
                                     </div>
                                     <div className="flex justify-between text-xs mt-2" style={{ color: "var(--text-tertiary)" }}>
-                                        <span>Finishers: {state.drivers.filter(d => !d.retired).length}</span>
-                                        <span>DNF: {state.drivers.filter(d => d.retired).length}</span>
+                                        <span>{t('finishers')}: {state.drivers.filter(d => !d.retired).length}</span>
+                                        <span>{t('dnf')}: {state.drivers.filter(d => d.retired).length}</span>
                                     </div>
                                 </div>
                             </div>
@@ -301,7 +303,7 @@ export default function LiveTimingPage() {
                                 <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: "1px solid var(--border-primary)" }}>
                                     <Flag size={16} style={{ color: "var(--f1-red)" }} />
                                     <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                                        Race Highlights
+                                        {t('raceHighlights')}
                                     </h3>
                                 </div>
                                 <div className="max-h-80 overflow-y-auto">
@@ -328,7 +330,7 @@ export default function LiveTimingPage() {
                     </div>
                 ) : (
                     <div className="text-center py-20">
-                        <p style={{ color: "var(--text-secondary)" }}>Selecione uma corrida para visualizar</p>
+                        <p style={{ color: "var(--text-secondary)" }}>{t('selectRacePrompt')}</p>
                     </div>
                 )}
             </main>

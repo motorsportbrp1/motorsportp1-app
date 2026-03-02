@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import Link from "next/link";
+import { Link } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
 import { handleImageFallback, getCountryFlagUrl, getMediaUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { fetchNextRace, fetchLastRacePodium, getConstructorColor } from "@/lib/supabase-queries";
@@ -59,6 +60,7 @@ type PodiumDriver = { id: string; name: string; team: string; teamColor: string;
 type NextRaceInfo = { name: string; country: string; circuitName: string; circuitPlace: string; date: string; laps: number; length: number; fp1Date: string | null; fp1Time: string | null; fp2Date: string | null; fp2Time: string | null; fp3Date: string | null; fp3Time: string | null; qualDate: string | null; qualTime: string | null; raceDate: string | null; raceTime: string | null; year: number; round: number; };
 
 export default function HomePage() {
+    const t = useTranslations('HomePage');
     /* States */
     const [cd, setCd] = useState({ d: 0, h: 0, m: 0, s: 0 });
     const [sessionCd, setSessionCd] = useState("00:00:00");
@@ -100,7 +102,7 @@ export default function HomePage() {
                 const raceData = await fetchNextRace();
                 if (raceData) {
                     setNextRace({
-                        name: raceData.grands_prix?.fullname || raceData.officialname || 'Próxima Corrida',
+                        name: raceData.grands_prix?.fullname || raceData.officialname || t('nextRace'),
                         country: raceData.grands_prix?.countryid || '',
                         circuitName: raceData.circuits?.fullname || raceData.circuits?.name || '',
                         circuitPlace: raceData.circuits?.placename || '',
@@ -216,7 +218,7 @@ export default function HomePage() {
                                     {/* Badge */}
                                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider w-fit" style={{ background: "rgba(236,19,30,0.2)", color: C.primary, border: "1px solid rgba(236,19,30,0.2)" }}>
                                         <span className="animate-pulse w-2 h-2 rounded-full" style={{ background: C.primary }} />
-                                        Próxima Corrida
+                                        {t('nextRace')}
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-3 mb-2">
@@ -225,20 +227,20 @@ export default function HomePage() {
                                                     <img src={getCountryFlagUrl(nextRace.country)} alt={`${nextRace.country} Flag`} className="w-full h-full object-cover" />
                                                 </div>
                                             )}
-                                            <h2 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">{nextRace?.name || 'Próxima Corrida'}</h2>
+                                            <h2 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">{nextRace?.name || t('nextRace')}</h2>
                                         </div>
                                         <p className="text-lg flex items-center gap-2" style={{ color: C.muted }}>
                                             <span className="material-symbols-outlined text-sm">location_on</span>
-                                            {nextRace?.circuitName || 'Circuito'}{nextRace?.circuitPlace ? `, ${nextRace.circuitPlace}` : ''}
+                                            {nextRace?.circuitName || t('circuit')}{nextRace?.circuitPlace ? `, ${nextRace.circuitPlace}` : ''}
                                         </p>
                                     </div>
                                     {/* Countdown */}
                                     <div className="flex gap-4 mt-2">
                                         {[
-                                            { v: p(cd.d), l: "Dias" },
-                                            { v: p(cd.h), l: "Hrs" },
-                                            { v: p(cd.m), l: "Min" },
-                                            { v: p(cd.s), l: "Seg" },
+                                            { v: p(cd.d), l: t('days') },
+                                            { v: p(cd.h), l: t('hrs') },
+                                            { v: p(cd.m), l: t('min') },
+                                            { v: p(cd.s), l: t('sec') },
                                         ].map((u) => (
                                             <div key={u.l} className="flex flex-col items-center backdrop-blur-sm p-3 rounded-lg min-w-[70px]" style={{ background: "rgba(35,36,41,0.8)", border: `1px solid ${C.border}` }}>
                                                 <span className="text-2xl font-bold text-white countdown-digit">{u.v}</span>
@@ -248,10 +250,10 @@ export default function HomePage() {
                                     </div>
                                     <div className="mt-4 flex gap-3">
                                         <Link href={`/race/${nextRace?.year || 2026}/${nextRace?.round || 1}`} className="flex items-center gap-2 text-white px-6 py-3 rounded-lg font-bold uppercase tracking-wide text-sm transition-colors" style={{ background: C.primary }}>
-                                            Race Hub <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                            {t('raceHub')} <span className="material-symbols-outlined text-sm">arrow_forward</span>
                                         </Link>
                                         <button className="text-white px-6 py-3 rounded-lg font-bold uppercase tracking-wide text-sm transition-colors" style={{ background: C.lighter, border: "1px solid #475569" }}>
-                                            Guia do Circuito
+                                            {t('circuitGuide')}
                                         </button>
                                     </div>
                                 </div>
@@ -268,11 +270,11 @@ export default function HomePage() {
                                     ) : null}
                                     <div className="hidden text-white/20 flex-col items-center gap-2">
                                         <span className="material-symbols-outlined text-6xl">conversion_path</span>
-                                        <span className="text-xs tracking-widest uppercase">Layout Pendente</span>
+                                        <span className="text-xs tracking-widest uppercase">{t('pendingLayout')}</span>
                                     </div>
                                     <div className="absolute bottom-0 right-0 p-2 rounded text-xs" style={{ background: "rgba(35,36,41,0.9)", color: C.muted }}>
-                                        <div>Extensão: <span className="text-white font-mono">{nextRace?.length ? `${nextRace.length.toFixed(3)} km` : '—'}</span></div>
-                                        <div>Voltas: <span className="text-white font-mono">{nextRace?.laps || '—'}</span></div>
+                                        <div>{t('length')}: <span className="text-white font-mono">{nextRace?.length ? `${nextRace.length.toFixed(3)} km` : '—'}</span></div>
+                                        <div>{t('laps')}: <span className="text-white font-mono">{nextRace?.laps || '—'}</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -283,43 +285,43 @@ export default function HomePage() {
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="text-lg font-bold text-white uppercase tracking-wide flex items-center gap-2">
                                     <span className="w-1 h-5 rounded-full" style={{ background: C.primary }} />
-                                    Programação do Fim de Semana
+                                    {t('scheduleTitle')}
                                 </h3>
-                                <span className="text-xs" style={{ color: C.muted }}>Horários de Brasília</span>
+                                <span className="text-xs" style={{ color: C.muted }}>{t('brasiliaTime')}</span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {/* Práticas */}
                                 <div className="rounded-lg p-4" style={{ background: "rgba(46,48,54,0.5)", border: `1px solid ${C.border}` }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>Treinos Livres</div>
+                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>{t('freePractice')}</div>
                                     <div className="space-y-3">
-                                        {nextRace?.fp1Date && <ScheduleRow label={`${fmtDate(nextRace.fp1Date)} • Treino Livre 1`} time={fmtTime(nextRace.fp1Time)} />}
-                                        {nextRace?.fp2Date && <ScheduleRow label={`${fmtDate(nextRace.fp2Date)} • Treino Livre 2`} time={fmtTime(nextRace.fp2Time)} />}
-                                        {nextRace?.fp3Date && <ScheduleRow label={`${fmtDate(nextRace.fp3Date)} • Treino Livre 3`} time={fmtTime(nextRace.fp3Time)} />}
-                                        {!nextRace?.fp1Date && !nextRace?.fp2Date && !nextRace?.fp3Date && <span className="text-xs" style={{ color: C.muted }}>Horários a confirmar</span>}
+                                        {nextRace?.fp1Date && <ScheduleRow label={`${fmtDate(nextRace.fp1Date)} • ${t('fp1')}`} time={fmtTime(nextRace.fp1Time)} />}
+                                        {nextRace?.fp2Date && <ScheduleRow label={`${fmtDate(nextRace.fp2Date)} • ${t('fp2')}`} time={fmtTime(nextRace.fp2Time)} />}
+                                        {nextRace?.fp3Date && <ScheduleRow label={`${fmtDate(nextRace.fp3Date)} • ${t('fp3')}`} time={fmtTime(nextRace.fp3Time)} />}
+                                        {!nextRace?.fp1Date && !nextRace?.fp2Date && !nextRace?.fp3Date && <span className="text-xs" style={{ color: C.muted }}>{t('tba')}</span>}
                                     </div>
                                 </div>
                                 {/* Qualifying */}
                                 <div className="rounded-lg p-4" style={{ background: "rgba(46,48,54,0.5)", border: `1px solid ${C.border}` }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>Classificação</div>
+                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>{t('qualifying')}</div>
                                     <div className="space-y-3">
                                         {nextRace?.qualDate ? (
                                             <div className="flex justify-between items-center">
-                                                <span className="text-sm text-white font-bold">{fmtDate(nextRace.qualDate)} • Qualifying</span>
+                                                <span className="text-sm text-white font-bold">{fmtDate(nextRace.qualDate)} • {t('qualifyingSession')}</span>
                                                 <span className="text-xs font-mono px-2 py-1 rounded text-white" style={{ background: C.primary }}>{fmtTime(nextRace.qualTime)}</span>
                                             </div>
-                                        ) : <span className="text-xs" style={{ color: C.muted }}>Horário a confirmar</span>}
+                                        ) : <span className="text-xs" style={{ color: C.muted }}>{t('tba')}</span>}
                                     </div>
                                 </div>
                                 {/* Race */}
                                 <div className="rounded-lg p-4" style={{ background: "linear-gradient(to bottom right, rgba(236,19,30,0.2), rgba(236,19,30,0.05))", border: "1px solid rgba(236,19,30,0.3)" }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>🏁 {nextRace?.raceDate ? fmtDate(nextRace.raceDate) : 'Corrida'}</div>
+                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>🏁 {nextRace?.raceDate ? fmtDate(nextRace.raceDate) : t('race')}</div>
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center">
-                                            <span className="text-sm text-white font-bold">Corrida Oficial</span>
+                                            <span className="text-sm text-white font-bold">{t('officialRace')}</span>
                                             <span className="text-xs font-mono px-2 py-1 rounded text-white" style={{ background: C.primary }}>{nextRace?.raceTime ? fmtTime(nextRace.raceTime) : '—'}</span>
                                         </div>
                                         <div className="pt-2" style={{ borderTop: "1px solid #334155" }}>
-                                            <span className="text-xs" style={{ color: C.muted }}>{nextRace?.laps || '—'} voltas{nextRace?.length ? ` • ${(nextRace.length * (nextRace.laps || 1)).toFixed(1)} km` : ''}</span>
+                                            <span className="text-xs" style={{ color: C.muted }}>{nextRace?.laps || '—'} {t('laps').toLowerCase()}{nextRace?.length ? ` • ${(nextRace.length * (nextRace.laps || 1)).toFixed(1)} km` : ''}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -333,20 +335,20 @@ export default function HomePage() {
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="text-lg font-bold text-white uppercase tracking-wide flex items-center gap-2">
                                         <span className="w-1 h-5 rounded-full" style={{ background: C.primary }} />
-                                        Último Pódio
+                                        {t('lastPodium')}
                                         <span className="text-sm font-normal ml-2" style={{ color: C.dimmed }}>{podiumData?.race?.grands_prix?.name || podiumData?.race?.officialname || ''}</span>
                                     </h3>
                                     {podiumData?.race && (
                                         <Link href={`/analysis/session/${podiumData.race.year}/${podiumData.race.round}/R`} className="text-xs font-bold uppercase hover:text-white transition-colors flex items-center gap-1" style={{ color: C.primary }}>
-                                            Resultados Completos <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                            {t('fullResults')} <span className="material-symbols-outlined text-sm">arrow_forward</span>
                                         </Link>
                                     )}
                                 </div>
                                 <div className="flex flex-1 items-end justify-center gap-2 sm:gap-4 h-full pt-4">
                                     {(podiumData?.podium || []).map((d) => (
-                                        <PodiumCard key={d.id} driver={d} onClick={() => openModal(d.id)} />
+                                        <PodiumCard key={d.id} driver={d} onClick={() => openModal(d.id)} t={t} />
                                     ))}
-                                    {!podiumData && !loading && <span className="text-sm" style={{ color: C.muted }}>Carregando pódio...</span>}
+                                    {!podiumData && !loading && <span className="text-sm" style={{ color: C.muted }}>{t('loadingPodium')}</span>}
                                 </div>
                             </div>
 
@@ -358,9 +360,9 @@ export default function HomePage() {
                                 <div className="relative z-10">
                                     <div className="flex items-center gap-2 mb-4">
                                         <span className="material-symbols-outlined text-xl" style={{ color: C.primary }}>hotel_class</span>
-                                        <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.muted }}>Recorde da Semana</h3>
+                                        <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: C.muted }}>{t('recordWeek')}</h3>
                                     </div>
-                                    <h4 className="text-2xl font-bold text-white mb-2">Mais Poles em Monza</h4>
+                                    <h4 className="text-2xl font-bold text-white mb-2">{t('morePoles')}</h4>
                                     <div className="my-3">
                                         <span className="text-5xl font-bold tracking-tighter" style={{ color: C.primary }}>5</span>
                                     </div>
@@ -370,12 +372,12 @@ export default function HomePage() {
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-white leading-none">Lewis Hamilton</p>
-                                            <p className="text-xs mt-1" style={{ color: C.dimmed }}>Dividido com Schumacher</p>
+                                            <p className="text-xs mt-1" style={{ color: C.dimmed }}>{t('sharedWith')}</p>
                                         </div>
                                     </div>
                                     <div className="mt-6 pt-4" style={{ borderTop: "1px solid #334155" }}>
                                         <a className="text-xs font-bold text-white flex items-center justify-between group-hover:text-red-500 transition-colors" href="#">
-                                            Ver Histórico
+                                            {t('viewHistory')}
                                             <span className="material-symbols-outlined text-base">arrow_forward</span>
                                         </a>
                                     </div>
@@ -385,19 +387,19 @@ export default function HomePage() {
 
                         {/* ── QUICK STATS ── */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-slide-up">
-                            <QuickStat icon="emoji_events" iconColor={C.primary} label="Corridas 2026" value={<>0<span style={{ color: C.dimmed, fontSize: "1.125rem" }}>/24</span></>}>
+                            <QuickStat icon="emoji_events" iconColor={C.primary} label={t('races2026')} value={<>0<span style={{ color: C.dimmed, fontSize: "1.125rem" }}>/24</span></>}>
                                 <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: "#334155" }}>
                                     <div className="h-full rounded-full" style={{ background: C.primary, width: "0%" }} />
                                 </div>
                             </QuickStat>
-                            <QuickStat icon="speed" iconColor="#ff8700" label="Campeão 2025" value="Max">
+                            <QuickStat icon="speed" iconColor="#ff8700" label={t('champ2025')} value="Max">
                                 <div className="text-xs mt-1" style={{ color: C.dimmed }}>Red Bull Racing</div>
                             </QuickStat>
-                            <QuickStat icon="timer" iconColor="#fe0000" label="Recorde Aust." value="1:19.815">
+                            <QuickStat icon="timer" iconColor="#fe0000" label={t('recordAust')} value="1:19.815">
                                 <div className="text-xs mt-1" style={{ color: C.dimmed }}>Leclerc - 2024</div>
                             </QuickStat>
-                            <QuickStat icon="analytics" iconColor="#00d2be" label="Dados Supabase" value="76">
-                                <div className="text-xs mt-1" style={{ color: C.dimmed }}>Temporadas compiladas</div>
+                            <QuickStat icon="analytics" iconColor="#00d2be" label={t('supabaseData')} value="76">
+                                <div className="text-xs mt-1" style={{ color: C.dimmed }}>{t('seasonsCompiled')}</div>
                             </QuickStat>
                         </div>
                     </div>
@@ -408,7 +410,7 @@ export default function HomePage() {
                         {/* ── DRIVER STANDINGS ── */}
                         <div className="rounded-xl overflow-hidden flex flex-col max-h-[800px] card-hover" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                             <div className="p-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, background: "rgba(46,48,54,0.5)" }}>
-                                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Classificação Pilotos</h3>
+                                <h3 className="text-sm font-bold text-white uppercase tracking-wide">{t('driverStandings')}</h3>
                                 <span className="text-[10px] text-white px-2 py-0.5 rounded font-bold" style={{ background: C.primary }}>2025</span>
                             </div>
                             <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide">
@@ -434,15 +436,15 @@ export default function HomePage() {
                                 ))}
                             </div>
                             <div className="p-3 text-center mt-2" style={{ borderTop: "1px solid rgba(51,65,85,0.5)" }}>
-                                <Link href="/settings" className="text-xs font-bold hover:text-white transition-colors uppercase tracking-wider" style={{ color: C.primary }}>Ver Tabela Completa</Link>
+                                <Link href="/settings" className="text-xs font-bold hover:text-white transition-colors uppercase tracking-wider" style={{ color: C.primary }}>{t('fullTable')}</Link>
                             </div>
                         </div>
 
                         {/* ── CONSTRUCTOR STANDINGS ── */}
                         <div className="rounded-xl overflow-hidden card-hover" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                             <div className="p-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, background: "rgba(46,48,54,0.5)" }}>
-                                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Construtores</h3>
-                                <span className="text-[10px] text-white px-2 py-0.5 rounded font-bold" style={{ background: "#475569" }}>Top 5</span>
+                                <h3 className="text-sm font-bold text-white uppercase tracking-wide">{t('constructors')}</h3>
+                                <span className="text-[10px] text-white px-2 py-0.5 rounded font-bold" style={{ background: "#475569" }}>{t('top5')}</span>
                             </div>
                             <div className="p-2">
                                 {constructors.map((t, i) => (
@@ -463,7 +465,7 @@ export default function HomePage() {
                         {/* ── TELEMETRY ── */}
                         <div className="rounded-xl p-5 card-hover" style={{ background: `linear-gradient(to bottom right, ${C.lighter}, ${C.surface})`, border: `1px solid ${C.border}` }}>
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Insight de Telemetria</h3>
+                                <h3 className="text-sm font-bold text-white uppercase tracking-wide">{t('telemetryInsight')}</h3>
                                 <span className="material-symbols-outlined" style={{ color: C.dimmed }}>query_stats</span>
                             </div>
                             <div className="h-24 w-full flex items-end justify-between gap-1 mb-4 opacity-80">
@@ -476,10 +478,10 @@ export default function HomePage() {
                                 ))}
                             </div>
                             <p className="text-xs mb-4" style={{ color: C.muted }}>
-                                Verstappen levou <span className="text-white font-bold">5km/h</span> a mais de velocidade na Curva 12 comparado a Leclerc.
+                                {t('telemetryDetails')}
                             </p>
                             <Link href="/analysis/compare" className="block w-full py-2 rounded-lg text-xs font-bold text-white uppercase tracking-wider text-center transition-all" style={{ background: C.surface, border: "1px solid #475569" }}>
-                                Comparar Telemetria
+                                {t('compareTelemetry')}
                             </Link>
                         </div>
 
@@ -487,21 +489,21 @@ export default function HomePage() {
                         <div className="rounded-xl p-5 card-hover" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                             <div className="flex items-center gap-3 mb-4">
                                 <span className="w-3 h-3 rounded-full live-indicator" style={{ background: C.primary }} />
-                                <h3 className="text-sm font-bold text-white uppercase tracking-wide">Sessão Ao Vivo</h3>
+                                <h3 className="text-sm font-bold text-white uppercase tracking-wide">{t('liveSession')}</h3>
                             </div>
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-xs" style={{ color: C.muted }}>Próxima Sessão</span>
-                                    <span className="text-xs text-white font-bold">Treino Livre 1</span>
+                                    <span className="text-xs" style={{ color: C.muted }}>{t('nextSession')}</span>
+                                    <span className="text-xs text-white font-bold">{t('fp1')}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-xs" style={{ color: C.muted }}>Início em</span>
+                                    <span className="text-xs" style={{ color: C.muted }}>{t('startsIn')}</span>
                                     <span className="text-xs font-mono" style={{ color: C.primary }}>{sessionCd}</span>
                                 </div>
                                 <div className="pt-3" style={{ borderTop: "1px solid #334155" }}>
                                     <Link href="/analysis/live" className="w-full py-2 rounded-lg text-xs font-bold text-white uppercase tracking-wider transition-all flex items-center justify-center gap-2" style={{ background: C.primary }}>
                                         <span className="material-symbols-outlined text-sm">live_tv</span>
-                                        Acessar Live Timing
+                                        {t('accessLiveTiming')}
                                     </Link>
                                 </div>
                             </div>
@@ -512,9 +514,9 @@ export default function HomePage() {
                 {/* ── NEWS ── */}
                 <div className="mt-8 animate-slide-up">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-bold text-white uppercase tracking-wide">Últimas Notícias</h3>
+                        <h3 className="text-xl font-bold text-white uppercase tracking-wide">{t('latestNews')}</h3>
                         <a className="text-xs font-bold uppercase hover:text-white transition-colors flex items-center gap-1" href="#" style={{ color: C.primary }}>
-                            Ver Todas <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                            {t('viewAll')} <span className="material-symbols-outlined text-sm">arrow_forward</span>
                         </a>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -526,7 +528,7 @@ export default function HomePage() {
                                 </div>
                                 <h4 className="text-sm font-bold text-white mb-2">{n.title}</h4>
                                 <a className="text-xs font-bold flex items-center gap-1" href="#" style={{ color: C.primary }}>
-                                    Ler mais <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                    {t('readMore')} <span className="material-symbols-outlined text-sm">arrow_forward</span>
                                 </a>
                             </div>
                         ))}
@@ -558,17 +560,17 @@ export default function HomePage() {
                                 </div>
                             </div>
                             <div className="grid grid-cols-4 gap-3 mb-6">
-                                <ModalStat label="Pontos" value={modal.points} color={C.primary} />
-                                <ModalStat label="Vitórias" value={modal.wins} color="#eab308" />
-                                <ModalStat label="Pódios" value={modal.podiums} color="#3b82f6" />
-                                <ModalStat label="Poles" value={modal.poles} color="#22c55e" />
+                                <ModalStat label={t('points')} value={modal.points} color={C.primary} />
+                                <ModalStat label={t('wins')} value={modal.wins} color="#eab308" />
+                                <ModalStat label={t('podiums')} value={modal.podiums} color="#3b82f6" />
+                                <ModalStat label={t('poles')} value={modal.poles} color="#22c55e" />
                             </div>
                             <div className="flex gap-3">
                                 <Link href="/drivers" className="flex-1 py-3 rounded-lg text-white font-bold uppercase text-sm transition-colors text-center" style={{ background: C.primary }} onClick={() => setModal(null)}>
-                                    Perfil Completo
+                                    {t('fullProfile')}
                                 </Link>
                                 <Link href="/analysis/compare" className="flex-1 py-3 rounded-lg text-white font-bold uppercase text-sm transition-colors text-center" style={{ background: C.lighter, border: "1px solid #475569" }} onClick={() => setModal(null)}>
-                                    Comparar
+                                    {t('compare')}
                                 </Link>
                             </div>
                         </div>
@@ -602,7 +604,7 @@ function ScheduleRow({ label, time }: { label: string; time: string }) {
     );
 }
 
-function PodiumCard({ driver, onClick }: { driver: PodiumDriver; onClick: () => void }) {
+function PodiumCard({ driver, onClick, t }: { driver: PodiumDriver; onClick: () => void, t: any }) {
     const isW = driver.pos === 1;
     const avatarCls = isW ? "w-24 h-24 sm:w-28 sm:h-28" : "w-20 h-20 sm:w-24 sm:h-24";
     const pedestalH = isW ? "h-40" : driver.pos === 2 ? "h-32" : "h-28";
@@ -629,7 +631,7 @@ function PodiumCard({ driver, onClick }: { driver: PodiumDriver; onClick: () => 
                         <span className="text-2xl font-black text-white">{driver.name.split(' ').map(n => n[0]).join('')}</span>
                     </div>
                 )}
-                {isW && <div className="absolute bottom-0 inset-x-0 text-white text-[10px] font-bold text-center py-0.5 z-10" style={{ background: "var(--primary)" }}>VENCEDOR</div>}
+                {isW && <div className="absolute bottom-0 inset-x-0 text-white text-[10px] font-bold text-center py-0.5 z-10" style={{ background: "var(--primary)" }}>{t('winner')}</div>}
             </div>
             <div className={`w-full pt-6 pb-3 px-2 rounded-t-lg flex flex-col items-center justify-between ${pedestalH} ${isW ? "shadow-lg" : ""}`} style={{ background: "var(--surface-lighter)", borderTop: `4px solid ${driver.teamColor}` }}>
                 <div className="text-center">

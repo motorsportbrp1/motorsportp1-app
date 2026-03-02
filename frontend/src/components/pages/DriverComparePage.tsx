@@ -15,10 +15,12 @@ import { formatDelta } from "@/types";
 import { fetchSeasonDrivers } from "@/lib/supabase-queries";
 import { useDataFetch } from "@/hooks/useDataFetch";
 import { f1Service } from "@/services/f1Service";
+import { useTranslations } from "next-intl";
 
 type DriverOption = { driverId: string; abbreviation: string; fullName: string; firstName: string; lastName: string; constructorId: string; teamColor: string; driverNumber: number; };
 
 export default function DriverComparePage() {
+    const t = useTranslations('DriverComparePage');
     const [drivers, setDrivers] = useState<DriverOption[]>([]);
     const [driver1, setDriver1] = useState("");
     const [driver2, setDriver2] = useState("");
@@ -79,7 +81,7 @@ export default function DriverComparePage() {
             legend: { top: 0, textStyle: { color: "#a0a0b0", fontSize: 12 } },
             grid: { left: 55, right: 20, top: 40, bottom: 50 },
             xAxis: {
-                name: "Distance (m)",
+                name: t('distanceM'),
                 nameLocation: "center",
                 nameGap: 32,
                 nameTextStyle: { color: "#6b6b80" },
@@ -93,7 +95,7 @@ export default function DriverComparePage() {
                 splitLine: { show: false },
             },
             yAxis: {
-                name: "Speed (km/h)",
+                name: t('speedKmh'),
                 nameTextStyle: { color: "#6b6b80" },
                 axisLine: { lineStyle: { color: "#2a2a38" } },
                 axisLabel: { color: "#a0a0b0" },
@@ -135,13 +137,13 @@ export default function DriverComparePage() {
             formatter: (params: Array<{ data: [number, number] }>) => {
                 const d = params[0]?.data;
                 return d
-                    ? `Distance: ${(d[0] / 1000).toFixed(2)}km<br/>Delta: ${formatDelta(d[1])}s`
+                    ? `${t('distanceM').split(' ')[0]}: ${(d[0] / 1000).toFixed(2)}km<br/>${t('delta')}: ${formatDelta(d[1])}s`
                     : "";
             },
         },
         grid: { left: 55, right: 20, top: 20, bottom: 50 },
         xAxis: {
-            name: "Distance (m)",
+            name: t('distanceM'),
             nameLocation: "center" as const,
             nameGap: 32,
             nameTextStyle: { color: "#6b6b80" },
@@ -153,7 +155,7 @@ export default function DriverComparePage() {
             splitLine: { show: false },
         },
         yAxis: {
-            name: "Delta (s)",
+            name: t('deltaS'),
             nameTextStyle: { color: "#6b6b80" },
             axisLine: { lineStyle: { color: "#2a2a38" } },
             axisLabel: {
@@ -187,9 +189,9 @@ export default function DriverComparePage() {
     }), [d1Info, d2Info]);
 
     const tabs = [
-        { key: "speed" as const, label: "Speed Trace", icon: Zap },
-        { key: "delta" as const, label: "Delta", icon: BarChart2 },
-        { key: "corners" as const, label: "Corner Analysis", icon: ArrowLeftRight },
+        { key: "speed" as const, label: t('tabSpeedTrace'), icon: Zap },
+        { key: "delta" as const, label: t('tabDelta'), icon: BarChart2 },
+        { key: "corners" as const, label: t('tabCorners'), icon: ArrowLeftRight },
     ];
 
     return (
@@ -203,10 +205,10 @@ export default function DriverComparePage() {
                             size={24}
                             style={{ color: "var(--f1-red)", display: "inline", verticalAlign: "middle", marginRight: 8 }}
                         />
-                        Driver Compare
+                        {t('title')}
                     </h1>
                     <p className="page-subtitle">
-                        Telemetry overlay, time delta, and corner-by-corner analysis
+                        {t('subtitle')}
                     </p>
                 </div>
 
@@ -216,21 +218,21 @@ export default function DriverComparePage() {
                         <>
                             <div className="animate-spin w-4 h-4 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--accent-blue)' }}></div>
                             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>Loading Live Data</span> — Polling backend Async Worker para FastF1 (Irá demorar a primeira vez).
+                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>{t('loadingLiveData')}</span> — {t('loadingLiveDataDesc')}
                             </p>
                         </>
                     ) : telemetryData ? (
                         <>
                             <Zap size={16} style={{ color: "var(--accent-blue)" }} />
                             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>Live Data</span> — Exibindo telemetria autêntica calculada do FastF1.
+                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>{t('liveData')}</span> — {t('liveDataDesc')}
                             </p>
                         </>
                     ) : (
                         <>
                             <AlertCircle size={16} style={{ color: "var(--accent-blue)" }} />
                             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>Demo Data</span> — Pilotos reais do Supabase. Gráficos de telemetria usam dados demonstrativos.
+                                <span className="font-bold" style={{ color: "var(--accent-blue)" }}>{t('demoData')}</span> — {t('demoDataDesc')}
                             </p>
                         </>
                     )}
@@ -306,15 +308,15 @@ export default function DriverComparePage() {
                     {/* Summary Stats */}
                     <div className="flex justify-center gap-8 mt-5">
                         {[
-                            { label: "Driver 1", v1: d1Info?.fullName || driver1, v2: "", single: true, color: d1Info?.teamColor },
+                            { label: t('driver1'), v1: d1Info?.fullName || driver1, v2: "", single: true, color: d1Info?.teamColor },
                             {
-                                label: "Telemetry",
+                                label: t('telemetry'),
                                 v1: "",
-                                v2: "Demo Data",
+                                v2: telemetryData ? t('liveData') : t('demoData'),
                                 single: true,
                                 color: "var(--accent-blue)",
                             },
-                            { label: "Driver 2", v1: "", v2: d2Info?.fullName || driver2, single: true, color: d2Info?.teamColor },
+                            { label: t('driver2'), v1: "", v2: d2Info?.fullName || driver2, single: true, color: d2Info?.teamColor },
                         ].map((stat) => (
                             <div key={stat.label} className="text-center">
                                 <p
@@ -359,7 +361,7 @@ export default function DriverComparePage() {
                     {activeTab === "speed" && (
                         <div>
                             <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-secondary)" }}>
-                                Speed Trace Overlay — Best Lap
+                                {t('speedTraceTitle')}
                             </h3>
                             <ReactECharts option={speedOption} style={{ height: 400 }} opts={{ renderer: "canvas" }} />
                         </div>
@@ -368,10 +370,10 @@ export default function DriverComparePage() {
                     {activeTab === "delta" && (
                         <div>
                             <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--text-secondary)" }}>
-                                Time Delta — {driver1} vs {driver2}
+                                {t('timeDeltaTitle', { driver1, driver2 })}
                             </h3>
                             <p className="text-xs mb-3" style={{ color: "var(--text-tertiary)" }}>
-                                Below zero = {driver1} ahead · Above zero = {driver2} ahead
+                                {t('timeDeltaDesc', { driver1, driver2 })}
                             </p>
                             <ReactECharts option={deltaOption} style={{ height: 350 }} opts={{ renderer: "canvas" }} />
                         </div>
@@ -380,17 +382,17 @@ export default function DriverComparePage() {
                     {activeTab === "corners" && (
                         <div>
                             <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-secondary)" }}>
-                                Corner-by-Corner Analysis
+                                {t('cornerAnalysisTitle')}
                             </h3>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr style={{ borderBottom: "1px solid var(--border-primary)" }}>
-                                            <th className="text-center py-3 px-3 font-medium" style={{ color: "var(--text-tertiary)" }}>Corner</th>
-                                            <th className="text-right py-3 px-3 font-medium" style={{ color: d1Info?.teamColor }}>{driver1} Speed</th>
-                                            <th className="text-right py-3 px-3 font-medium" style={{ color: d2Info?.teamColor }}>{driver2} Speed</th>
-                                            <th className="text-right py-3 px-3 font-medium" style={{ color: "var(--text-tertiary)" }}>Delta</th>
-                                            <th className="text-center py-3 px-3 font-medium" style={{ color: "var(--text-tertiary)" }}>Advantage</th>
+                                            <th className="text-center py-3 px-3 font-medium" style={{ color: "var(--text-tertiary)" }}>{t('corner')}</th>
+                                            <th className="text-right py-3 px-3 font-medium" style={{ color: d1Info?.teamColor }}>{t('driverSpeed', { driver: driver1 })}</th>
+                                            <th className="text-right py-3 px-3 font-medium" style={{ color: d2Info?.teamColor }}>{t('driverSpeed', { driver: driver2 })}</th>
+                                            <th className="text-right py-3 px-3 font-medium" style={{ color: "var(--text-tertiary)" }}>{t('delta')}</th>
+                                            <th className="text-center py-3 px-3 font-medium" style={{ color: "var(--text-tertiary)" }}>{t('advantage')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>

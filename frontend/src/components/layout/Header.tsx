@@ -54,28 +54,10 @@ export default function Header() {
                     </nav>
                 </div>
 
-                {/* Search + Actions */}
+                {/* Actions */}
                 <div className="flex items-center gap-6 flex-1 justify-end">
-                    <div className="relative hidden sm:flex w-full max-w-xs group">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <span className="material-symbols-outlined" style={{ color: "#64748b" }}>search</span>
-                        </div>
-                        <input
-                            className="block w-full pl-10 pr-3 py-2 border-none rounded-full leading-5 text-slate-100 placeholder-slate-500 focus:outline-none sm:text-sm"
-                            style={{ background: "var(--surface-lighter)", boxShadow: "none" }}
-                            placeholder="Buscar piloto, circuito, telemetria..."
-                            type="text"
-                        />
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                            <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] rounded" style={{ background: "#334155", color: "#94a3b8" }}>⌘K</kbd>
-                        </div>
-                    </div>
                     <div className="flex items-center gap-4">
                         <LanguageSwitcher />
-                        <button className="hover:text-white transition-colors relative" style={{ color: "#94a3b8" }}>
-                            <span className="material-symbols-outlined">notifications</span>
-                            <span className="absolute top-0 right-0 h-2 w-2 rounded-full" style={{ background: "var(--primary)", boxShadow: "0 0 0 2px var(--surface)" }} />
-                        </button>
                         <button className="hover:text-white transition-colors" style={{ color: "#94a3b8" }}>
                             <span className="material-symbols-outlined">dashboard_customize</span>
                         </button>
