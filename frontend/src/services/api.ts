@@ -17,7 +17,7 @@ const isLocalDevHost = typeof window !== 'undefined' && ['localhost', '127.0.0.1
 const buildCandidateBaseUrls = () => {
     const urls = isLocalDevHost
         ? [localFallbackBaseUrl, formattedBaseUrl, hostedFallbackBaseUrl]
-        : [formattedBaseUrl, hostedFallbackBaseUrl, localFallbackBaseUrl];
+        : [formattedBaseUrl, hostedFallbackBaseUrl];
 
     return Array.from(new Set(urls.filter(Boolean)));
 };

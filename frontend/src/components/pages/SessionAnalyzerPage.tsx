@@ -93,6 +93,8 @@ const SESSION_LABELS: Record<string, string> = {
     R: "Race",
 };
 
+const OPENF1_SUPPORTED_START_YEAR = 2023;
+
 function prettifySlug(value?: string | null) {
     if (!value) return "";
 
@@ -193,6 +195,12 @@ function getAnalysisErrorMessage(error: unknown) {
     }
 
     return apiError?.message || "This session does not have analysis data available right now.";
+}
+
+function shouldPreferOpenF1Analysis(year: number) {
+    if (typeof window === "undefined") return false;
+    const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    return !isLocalHost && year >= OPENF1_SUPPORTED_START_YEAR;
 }
 
 export default function SessionAnalyzerPage({
@@ -324,23 +332,39 @@ export default function SessionAnalyzerPage({
         setSelectedDrivers([]);
 
         const locale = pathname.split("/").filter(Boolean)[0] || "pt-BR";
+        const analysisYear = Number(selectedYear);
+        const analysisRound = Number(selectedRound);
         router.replace(`/${locale}/analysis/session/${selectedYear}/${selectedRound}/${selectedSession}`);
 
+        const tryOpenF1Fallback = async () => {
+            const fallbackData = await getOpenF1SessionSummary(
+                analysisYear,
+                analysisRound,
+                selectedSession
+            );
+
+            if (fallbackData && ((fallbackData.laps || []).length > 0 || (fallbackData.results || []).length > 0)) {
+                setTelemetrySummary(normalizeSummaryData(fallbackData));
+                return true;
+            }
+
+            return false;
+        };
+
         try {
-            const data = await f1Service.getFastF1Summary(Number(selectedYear), Number(selectedRound), selectedSession);
+            if (shouldPreferOpenF1Analysis(analysisYear)) {
+                const loadedFromOpenF1 = await tryOpenF1Fallback();
+                if (loadedFromOpenF1) return;
+            }
+
+            const data = await f1Service.getFastF1Summary(analysisYear, analysisRound, selectedSession);
             setTelemetrySummary(normalizeSummaryData(data));
         } catch (err) {
             console.error("Failed to extract FastF1 telemetry, trying OpenF1 fallback:", err);
 
             try {
-                const fallbackData = await getOpenF1SessionSummary(
-                    Number(selectedYear),
-                    Number(selectedRound),
-                    selectedSession
-                );
-
-                if (fallbackData && ((fallbackData.laps || []).length > 0 || (fallbackData.results || []).length > 0)) {
-                    setTelemetrySummary(normalizeSummaryData(fallbackData));
+                const loadedFromOpenF1 = await tryOpenF1Fallback();
+                if (loadedFromOpenF1) {
                     return;
                 }
             } catch (fallbackError) {
