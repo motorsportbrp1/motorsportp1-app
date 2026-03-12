@@ -310,12 +310,27 @@ export interface OpenF1Lap {
     session_key: number;
     meeting_key: number;
     driver_number: number;
+    lap_number: number;
     lap_duration: number | null;
     date_start: string;
-    sector_1_time: number | null;
-    sector_2_time: number | null;
-    sector_3_time: number | null;
+    duration_sector_1: number | null;
+    duration_sector_2: number | null;
+    duration_sector_3: number | null;
+    i1_speed: number | null;
+    i2_speed: number | null;
+    st_speed: number | null;
     is_pit_out_lap: boolean;
+}
+
+export interface OpenF1Stint {
+    meeting_key: number;
+    session_key: number;
+    stint_number: number;
+    driver_number: number;
+    lap_start: number;
+    lap_end: number;
+    compound: string | null;
+    tyre_age_at_start: number | null;
 }
 
 // ... existing functions ...
@@ -340,6 +355,30 @@ export async function getLiveLaps(sessionKey: number): Promise<OpenF1Lap[]> {
         return response.data;
     } catch (error) {
         console.error("Error fetching live laps:", error);
+        return [];
+    }
+}
+
+async function getSessionLaps(sessionKey: number): Promise<OpenF1Lap[]> {
+    try {
+        return await getCachedOpenF1(
+            `laps:${sessionKey}`,
+            async () => (await axios.get(`${OPENF1_BASE_URL}/laps?session_key=${sessionKey}`)).data
+        );
+    } catch (error) {
+        console.error("Error fetching session laps:", error);
+        return [];
+    }
+}
+
+async function getSessionStints(sessionKey: number): Promise<OpenF1Stint[]> {
+    try {
+        return await getCachedOpenF1(
+            `stints:${sessionKey}`,
+            async () => (await axios.get(`${OPENF1_BASE_URL}/stints?session_key=${sessionKey}`)).data
+        );
+    } catch (error) {
+        console.error("Error fetching session stints:", error);
         return [];
     }
 }
@@ -621,6 +660,201 @@ export async function getLatestRacePodium(year = new Date().getUTCFullYear()) {
                 },
             },
             podium: topThree,
+        };
+    });
+}
+
+const OPENF1_SESSION_CODE_MAP: Record<string, string[]> = {
+    FP1: ["Practice 1"],
+    FP2: ["Practice 2"],
+    FP3: ["Practice 3"],
+    SQ: ["Sprint Qualifying", "Sprint Shootout"],
+    S: ["Sprint"],
+    Q: ["Qualifying"],
+    R: ["Race"],
+};
+
+function getOpenF1SessionByCode(sessions: OpenF1WeekendSession[], sessionCode: string) {
+    const candidates = OPENF1_SESSION_CODE_MAP[sessionCode] || [sessionCode];
+    return sessions.find((session) => candidates.includes(session.session_name)) || null;
+}
+
+function getOpenF1ResultStatus(result: OpenF1SessionResult & { dnf?: boolean; dns?: boolean; dsq?: boolean }) {
+    if (result.dsq) return "DSQ";
+    if (result.dns) return "DNS";
+    if (result.dnf) return "DNF";
+    return "Finished";
+}
+
+export async function getOpenF1SessionSummary(year: number, round: number, sessionCode: string) {
+    return getCachedOpenF1(`session_summary:${year}:${round}:${sessionCode}`, async () => {
+        const meetings = (await getMeetings(year))
+            .filter(isChampionshipMeeting)
+            .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime());
+
+        const meeting = meetings[round - 1];
+        if (!meeting) return null;
+
+        const sessions = await getMeetingSessions(meeting.meeting_key);
+        const session = getOpenF1SessionByCode(sessions, sessionCode);
+        if (!session) return null;
+
+        const [drivers, laps, stints, results] = await Promise.all([
+            getSessionDrivers(session.session_key),
+            getSessionLaps(session.session_key),
+            getSessionStints(session.session_key),
+            getSessionResults(session.session_key),
+        ]);
+
+        const driversByNumber = new Map<number, OpenF1Driver>(
+            drivers.map((driver) => [driver.driver_number, driver])
+        );
+
+        const stintsByDriver = new Map<number, OpenF1Stint[]>();
+        stints.forEach((stint) => {
+            const current = stintsByDriver.get(stint.driver_number) || [];
+            current.push(stint);
+            stintsByDriver.set(stint.driver_number, current);
+        });
+
+        stintsByDriver.forEach((driverStints) => {
+            driverStints.sort((a, b) => a.lap_start - b.lap_start);
+        });
+
+        const validLapTimesByDriver = new Map<number, number>();
+        laps.forEach((lap) => {
+            if (lap.lap_duration == null) return;
+            const currentBest = validLapTimesByDriver.get(lap.driver_number);
+            if (currentBest == null || lap.lap_duration < currentBest) {
+                validLapTimesByDriver.set(lap.driver_number, lap.lap_duration);
+            }
+        });
+
+        const normalizedLaps = laps
+            .map((lap) => {
+                const driver = driversByNumber.get(lap.driver_number);
+                if (!driver) return null;
+
+                const matchingStint = (stintsByDriver.get(lap.driver_number) || []).find(
+                    (stint) => lap.lap_number >= stint.lap_start && lap.lap_number <= stint.lap_end
+                );
+
+                return {
+                    Driver: driver.name_acronym || driver.broadcast_name || String(lap.driver_number),
+                    Team: driver.team_name || "Unknown",
+                    LapNumber: lap.lap_number,
+                    LapTime: lap.lap_duration != null ? Math.round(lap.lap_duration * 1000) : null,
+                    Sector1Time: lap.duration_sector_1 != null ? Math.round(lap.duration_sector_1 * 1000) : null,
+                    Sector2Time: lap.duration_sector_2 != null ? Math.round(lap.duration_sector_2 * 1000) : null,
+                    Sector3Time: lap.duration_sector_3 != null ? Math.round(lap.duration_sector_3 * 1000) : null,
+                    Position: null,
+                    Compound: matchingStint?.compound || "UNKNOWN",
+                    Stint: matchingStint?.stint_number || 1,
+                    IsPersonalBest: lap.lap_duration != null && validLapTimesByDriver.get(lap.driver_number) != null
+                        ? Math.abs(lap.lap_duration - Number(validLapTimesByDriver.get(lap.driver_number))) < 0.001
+                        : false,
+                };
+            })
+            .filter(Boolean);
+
+        const bestS1 = Math.min(...normalizedLaps.map((lap) => lap?.Sector1Time || Number.POSITIVE_INFINITY));
+        const bestS2 = Math.min(...normalizedLaps.map((lap) => lap?.Sector2Time || Number.POSITIVE_INFINITY));
+        const bestS3 = Math.min(...normalizedLaps.map((lap) => lap?.Sector3Time || Number.POSITIVE_INFINITY));
+
+        const lapsByDriver = new Map<string, Array<NonNullable<(typeof normalizedLaps)[number]>>>();
+        normalizedLaps.forEach((lap) => {
+            if (!lap) return;
+            const current = lapsByDriver.get(lap.Driver) || [];
+            current.push(lap);
+            lapsByDriver.set(lap.Driver, current);
+        });
+
+        const bestSectors = Array.from(lapsByDriver.entries())
+            .map(([driver, driverLaps]) => {
+                const timedLaps = driverLaps.filter((lap) => lap.LapTime != null);
+                if (!timedLaps.length) return null;
+
+                const fastestLap = [...timedLaps].sort((a, b) => Number(a.LapTime) - Number(b.LapTime))[0];
+                const personalBestS1 = Math.min(...timedLaps.map((lap) => lap.Sector1Time || Number.POSITIVE_INFINITY));
+                const personalBestS2 = Math.min(...timedLaps.map((lap) => lap.Sector2Time || Number.POSITIVE_INFINITY));
+                const personalBestS3 = Math.min(...timedLaps.map((lap) => lap.Sector3Time || Number.POSITIVE_INFINITY));
+
+                const classify = (value: number | null, personalBest: number, overallBest: number) => {
+                    if (value == null) return 0;
+                    if (value <= overallBest + 1) return 2;
+                    if (value <= personalBest + 1) return 1;
+                    return 0;
+                };
+
+                return {
+                    driver,
+                    s1: fastestLap.Sector1Time,
+                    s1_color: classify(fastestLap.Sector1Time, personalBestS1, bestS1),
+                    s2: fastestLap.Sector2Time,
+                    s2_color: classify(fastestLap.Sector2Time, personalBestS2, bestS2),
+                    s3: fastestLap.Sector3Time,
+                    s3_color: classify(fastestLap.Sector3Time, personalBestS3, bestS3),
+                };
+            })
+            .filter(Boolean);
+
+        const speedTraps = Array.from(stintsByDriver.keys()).map((driverNumber) => {
+            const driver = driversByNumber.get(driverNumber);
+            const driverLaps = laps.filter((lap) => lap.driver_number === driverNumber);
+
+            return {
+                driver: driver?.name_acronym || String(driverNumber),
+                top_speed: Math.max(...driverLaps.map((lap) => lap.st_speed || 0), 0),
+                SpeedST: Math.max(...driverLaps.map((lap) => lap.st_speed || 0), 0),
+                SpeedI1: Math.max(...driverLaps.map((lap) => lap.i1_speed || 0), 0),
+                SpeedI2: Math.max(...driverLaps.map((lap) => lap.i2_speed || 0), 0),
+                SpeedFL: null,
+            };
+        }).filter((entry) => entry.top_speed > 0);
+
+        const normalizedResults = results.map((result, index) => {
+            const driver = driversByNumber.get(result.driver_number);
+            return {
+                Position: result.position ?? null,
+                ClassifiedPosition: result.position ?? String(index + 1),
+                Abbreviation: driver?.name_acronym || String(result.driver_number),
+                FullName: driver?.full_name || driver?.broadcast_name || String(result.driver_number),
+                TeamName: driver?.team_name || "Unknown",
+                TeamColor: driver?.team_colour || null,
+                DriverNumber: result.driver_number,
+                GridPosition: null,
+                Status: getOpenF1ResultStatus(result),
+                Points: "points" in result ? (result as { points?: number }).points ?? null : null,
+                Time: "duration" in result && typeof (result as { duration?: number | null }).duration === "number"
+                    ? Math.round(Number((result as { duration?: number }).duration) * 1000)
+                    : null,
+                Q1: null,
+                Q2: null,
+                Q3: null,
+            };
+        });
+
+        return {
+            source: "openf1",
+            session_info: {
+                year,
+                round,
+                session_name: session.session_name,
+                event_name: meeting.meeting_name,
+                official_event_name: meeting.meeting_official_name,
+                country: meeting.country_name,
+                location: meeting.location,
+                circuit: meeting.circuit_short_name,
+                event_date: meeting.date_start,
+                laps: Math.max(...normalizedLaps.map((lap) => Number(lap?.LapNumber || 0)), 0),
+                f1_api_support: true,
+            },
+            results: normalizedResults,
+            laps: normalizedLaps,
+            stints,
+            speed_traps: speedTraps,
+            minisectors: [],
+            best_sectors: bestSectors,
         };
     });
 }

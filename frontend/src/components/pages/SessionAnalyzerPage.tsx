@@ -9,6 +9,7 @@ import Footer from "@/components/layout/Footer";
 import { formatLapTime, TEAM_COLORS } from "@/types";
 import { getCompoundColor, getTireImageUrl } from "@/lib/utils";
 import { fetchSeasonRaces, fetchSeasons as fetchSupabaseSeasons } from "@/lib/supabase-queries";
+import { getOpenF1SessionSummary } from "@/services/openf1";
 import { useTranslations } from "next-intl";
 import { f1Service, Season } from "@/services/f1Service";
 import { usePathname, useRouter } from "next/navigation";
@@ -173,6 +174,27 @@ function normalizeSummaryData(data: any): SessionSummary {
     };
 }
 
+function getAnalysisErrorMessage(error: unknown) {
+    const apiError = error as {
+        message?: string;
+        response?: { status?: number; data?: { detail?: string } | string };
+    };
+
+    if (apiError?.response?.status === 404) {
+        return "The analysis backend is unavailable right now and this session could not be recovered from the OpenF1 fallback.";
+    }
+
+    if (typeof apiError?.response?.data === "string" && apiError.response.data.trim()) {
+        return apiError.response.data;
+    }
+
+    if (typeof apiError?.response?.data === "object" && apiError.response.data?.detail) {
+        return apiError.response.data.detail;
+    }
+
+    return apiError?.message || "This session does not have analysis data available right now.";
+}
+
 export default function SessionAnalyzerPage({
     initialYear,
     initialRound,
@@ -308,8 +330,24 @@ export default function SessionAnalyzerPage({
             const data = await f1Service.getFastF1Summary(Number(selectedYear), Number(selectedRound), selectedSession);
             setTelemetrySummary(normalizeSummaryData(data));
         } catch (err) {
-            console.error("Failed to extract telemetry:", err);
-            alert("This session might not have FastF1 data available yet or an error occurred.");
+            console.error("Failed to extract FastF1 telemetry, trying OpenF1 fallback:", err);
+
+            try {
+                const fallbackData = await getOpenF1SessionSummary(
+                    Number(selectedYear),
+                    Number(selectedRound),
+                    selectedSession
+                );
+
+                if (fallbackData && ((fallbackData.laps || []).length > 0 || (fallbackData.results || []).length > 0)) {
+                    setTelemetrySummary(normalizeSummaryData(fallbackData));
+                    return;
+                }
+            } catch (fallbackError) {
+                console.error("OpenF1 fallback also failed:", fallbackError);
+            }
+
+            alert(getAnalysisErrorMessage(err));
         } finally {
             setIsAnalyzing(false);
         }
@@ -334,10 +372,6 @@ export default function SessionAnalyzerPage({
         () => races.find((race) => race.round === Number(selectedRound)) || null,
         [races, selectedRound]
     );
-    const showPositionTab = selectedSession === "R" || selectedSession === "S";
-    const showResultsTab = (telemetrySummary?.results || []).length > 0;
-    const activeEventName = telemetrySummary?.session_info?.event_name || getRaceDisplayName(selectedRace);
-    const activeSessionLabel = SESSION_LABELS[selectedSession] || selectedSession || "";
 
     // Extract unique drivers from lap data dynamically
     const availableDrivers = useMemo(() => {
@@ -432,6 +466,12 @@ export default function SessionAnalyzerPage({
         const maxSelectedLap = Math.max(...filteredLaps.map((lap: any) => Number(lap.LapNumber || 0)), 0);
         return maxSelectedLap || totalLaps;
     }, [filteredLaps, totalLaps]);
+
+    const hasPositionData = filteredLaps.some((lap: any) => lap.Position != null);
+    const showPositionTab = (selectedSession === "R" || selectedSession === "S") && hasPositionData;
+    const showResultsTab = (telemetrySummary?.results || []).length > 0;
+    const activeEventName = telemetrySummary?.session_info?.event_name || getRaceDisplayName(selectedRace);
+    const activeSessionLabel = SESSION_LABELS[selectedSession] || selectedSession || "";
 
     const lapNumbers = useMemo(
         () => Array.from({ length: displayLapCount }, (_, index) => index + 1),
