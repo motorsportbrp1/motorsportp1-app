@@ -56,7 +56,17 @@
         "hrs": "Hrs",
         "min": "Min",
         "sec": "Seg",
-        "searchPlaceholder": "Buscar piloto, circuito, telemetría..."
+        "searchPlaceholder": "Buscar piloto, circuito, telemetría...",
+        "news1Title": "Verstappen tricampeón de forma espectacular en 2025",
+        "news1Time": "Hace 2h",
+        "news1Category": "Campeonato",
+        "news2Title": "GP de Australia promete abrir 2026 con sorpresas",
+        "news2Time": "Hace 4h",
+        "news2Category": "Previa",
+        "news3Title": "Hamilton: \"Preparado para llevar a Ferrari a la cima\"",
+        "news3Time": "Hace 6h",
+        "news3Category": "Entrevista",
+        "pts": "PTS"
     },
     "Navigation": {
         "home": "Inicio",
@@ -72,7 +82,7 @@
         "admin": "Admin"
     },
     "LiveTimingPage": {
-        "title": "Repetición de Carrera",
+        "title": "Carrera en Vivo",
         "finalClassification": "Clasificación Final",
         "laps": "Vueltas",
         "selectRace": "Seleccionar Carrera",
@@ -87,6 +97,17 @@
         "bestLap": "Mejor Vuelta",
         "pits": "Pits",
         "status": "Estado",
+        "connectingOpenF1": "Conectando a OpenF1...",
+        "live": "EN VIVO",
+        "connectedStream": "Conectado a la Telemetría de OpenF1",
+        "lastSync": "Última Sincronización",
+        "connectingTiming": "Conectando al Cronómetro Oficial...",
+        "noActiveSessions": "No se encontraron sesiones activas en OpenF1.",
+        "waitingSession": "Esperando el inicio de la próxima sesión...",
+        "waitingTiming": "Esperando datos de tiempo...",
+        "raceControl": "Control de Carrera",
+        "noMessages": "Aún no hay mensajes.",
+        "interval": "Intervalo",
         "podium": "PODIO",
         "finished": "Terminado",
         "raceSummary": "Resumen de Carrera",
@@ -128,8 +149,11 @@
         "deltaS": "Delta (s)"
     },
     "SessionAnalyzerPage": {
-        "title": "🇨🇳 Gran Premio de China — Analizador de Sesiones",
-        "subtitle": "Circuito Internacional de Shanghái · 56 Vueltas",
+        "title": "Analizador de Sesion",
+        "subtitle": "Seleccione una sesion para analizar los datos del fin de semana.",
+        "seasonLabel": "Temporada",
+        "raceLabel": "Gran Premio",
+        "sessionLabel": "Sesión",
         "round": "Ronda",
         "race": "Carrera",
         "lap": "Vuelta",
@@ -153,7 +177,11 @@
         "team": "Equipo",
         "time": "Tiempo",
         "points": "Puntos",
-        "lapNum": "Vuelta {num}"
+        "lapNum": "Vuelta {num}",
+        "speedTrapEmpty": "No hay datos de speed trap disponibles para esta sesion.",
+        "sessionBest": "Mejor de la sesion",
+        "speedTrap": "Speed Trap",
+        "tabResults": "Resultados"
     },
     "RaceWeekendPage": {
         "sessionCompleted": "Sesión Completada",
@@ -214,5 +242,29 @@
         "typeTeam": "Equipo",
         "typeCircuit": "Circuito",
         "typeSession": "Sesión"
+    },
+    "Sidebar": {
+        "home": "Inicio",
+        "sessionAnalyzer": "Analizador de Sesión",
+        "driverCompare": "Comparar Pilotos",
+        "liveTiming": "Tiempos en Vivo",
+        "settings": "Ajustes",
+        "f1Analytics": "Analíticas F1",
+        "lightMode": "Modo Claro",
+        "darkMode": "Modo Oscuro",
+        "collapse": "Contraer"
+    },
+    "Navbar": {
+        "season2024": "Temporada 2024",
+        "dashboard": "Panel de Control",
+        "searchPlaceholder": "Buscar pilotos, circuitos, sesiones...",
+        "noActiveSession": "Sin Sesión Activa"
+    },
+    "Footer": {
+        "engineTitle": "MOTOR DE MOTORSPORT",
+        "privacy": "Política de Privacidad",
+        "terms": "Términos de Uso",
+        "cookies": "Ajustes de Cookies",
+        "copyright": "© 2024 F1 Insight. Aplicación No Oficial."
     }
 }

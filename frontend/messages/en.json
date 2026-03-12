@@ -56,7 +56,17 @@
         "hrs": "Hrs",
         "min": "Min",
         "sec": "Sec",
-        "searchPlaceholder": "Search driver, circuit, telemetry..."
+        "searchPlaceholder": "Search driver, circuit, telemetry...",
+        "news1Title": "Verstappen spectacular 3-time champion in 2025",
+        "news1Time": "2h ago",
+        "news1Category": "Championship",
+        "news2Title": "Australian GP promises to open 2026 with surprises",
+        "news2Time": "4h ago",
+        "news2Category": "Preview",
+        "news3Title": "Hamilton: \"Ready to take Ferrari to the top\"",
+        "news3Time": "6h ago",
+        "news3Category": "Interview",
+        "pts": "PTS"
     },
     "Navigation": {
         "home": "Home",
@@ -72,7 +82,7 @@
         "admin": "Admin"
     },
     "LiveTimingPage": {
-        "title": "Race Replay",
+        "title": "Live Race",
         "finalClassification": "Final Classification",
         "laps": "Laps",
         "selectRace": "Select a race",
@@ -87,6 +97,17 @@
         "bestLap": "Best Lap",
         "pits": "Pits",
         "status": "Status",
+        "connectingOpenF1": "Connecting to OpenF1...",
+        "live": "LIVE",
+        "connectedStream": "Connected to OpenF1 Telemetry Stream",
+        "lastSync": "Last Sync",
+        "connectingTiming": "Connecting to Official Timing...",
+        "noActiveSessions": "No active sessions found on OpenF1 right now.",
+        "waitingSession": "Waiting for the next session to start...",
+        "waitingTiming": "Waiting for timing data...",
+        "raceControl": "Race Control",
+        "noMessages": "No messages yet.",
+        "interval": "Interval",
         "podium": "PODIUM",
         "finished": "Finished",
         "raceSummary": "Race Summary",
@@ -128,8 +149,11 @@
         "deltaS": "Delta (s)"
     },
     "SessionAnalyzerPage": {
-        "title": "🇨🇳 Chinese Grand Prix — Session Analyzer",
-        "subtitle": "Shanghai International Circuit · 56 Laps",
+        "title": "Session Analyzer",
+        "subtitle": "Select a session to analyze the weekend data.",
+        "seasonLabel": "Season",
+        "raceLabel": "Race Weekend",
+        "sessionLabel": "Session",
         "round": "Round",
         "race": "Race",
         "lap": "Lap",
@@ -153,7 +177,11 @@
         "team": "Team",
         "time": "Time",
         "points": "Points",
-        "lapNum": "Lap {num}"
+        "lapNum": "Lap {num}",
+        "speedTrapEmpty": "No speed trap data is available for this session.",
+        "sessionBest": "Session best",
+        "speedTrap": "Speed Trap",
+        "tabResults": "Results"
     },
     "RaceWeekendPage": {
         "sessionCompleted": "Session Completed",
@@ -214,5 +242,29 @@
         "typeTeam": "Team",
         "typeCircuit": "Circuit",
         "typeSession": "Session"
+    },
+    "Sidebar": {
+        "home": "Home",
+        "sessionAnalyzer": "Session Analyzer",
+        "driverCompare": "Driver Compare",
+        "liveTiming": "Live Timing",
+        "settings": "Settings",
+        "f1Analytics": "F1 Analytics",
+        "lightMode": "Light Mode",
+        "darkMode": "Dark Mode",
+        "collapse": "Collapse"
+    },
+    "Navbar": {
+        "season2024": "2024 Season",
+        "dashboard": "Dashboard",
+        "searchPlaceholder": "Search drivers, circuits, sessions...",
+        "noActiveSession": "No Active Session"
+    },
+    "Footer": {
+        "engineTitle": "MOTORSPORT ENGINE",
+        "privacy": "Privacy Policy",
+        "terms": "Terms of Use",
+        "cookies": "Cookie Settings",
+        "copyright": "© 2024 F1 Insight. Unofficial Application."
     }
 }

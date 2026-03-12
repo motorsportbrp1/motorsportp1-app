@@ -56,7 +56,17 @@
         "hrs": "Hrs",
         "min": "Min",
         "sec": "Seg",
-        "searchPlaceholder": "Buscar piloto, circuito, telemetria..."
+        "searchPlaceholder": "Buscar piloto, circuito, telemetria...",
+        "news1Title": "Verstappen tricampeão de forma espetacular em 2025",
+        "news1Time": "2h atrás",
+        "news1Category": "Campeonato",
+        "news2Title": "GP da Austrália promete abrir 2026 com surpresas",
+        "news2Time": "4h atrás",
+        "news2Category": "Prévia",
+        "news3Title": "Hamilton: \"Preparado para levar a Ferrari ao topo\"",
+        "news3Time": "6h atrás",
+        "news3Category": "Entrevista",
+        "pts": "PTS"
     },
     "Navigation": {
         "home": "Início",
@@ -72,7 +82,7 @@
         "admin": "Admin"
     },
     "LiveTimingPage": {
-        "title": "Replay da Corrida",
+        "title": "Corrida Ao Vivo",
         "finalClassification": "Classificação Final",
         "laps": "Voltas",
         "selectRace": "Selecionar Corrida",
@@ -87,6 +97,17 @@
         "bestLap": "Melhor Volta",
         "pits": "Pits",
         "status": "Status",
+        "connectingOpenF1": "Conectando ao OpenF1...",
+        "live": "AO VIVO",
+        "connectedStream": "Conectado à Telemetria OpenF1",
+        "lastSync": "Última Sincronização",
+        "connectingTiming": "Conectando ao Cronômetro Oficial...",
+        "noActiveSessions": "Nenhuma sessão ativa encontrada no OpenF1.",
+        "waitingSession": "Aguardando o início da próxima sessão...",
+        "waitingTiming": "Aguardando dados de tempo...",
+        "raceControl": "Controle de Prova",
+        "noMessages": "Nenhuma mensagem.",
+        "interval": "Intervalo",
         "podium": "PÓDIO",
         "finished": "Concluído",
         "raceSummary": "Resumo da Corrida",
@@ -128,8 +149,11 @@
         "deltaS": "Delta (s)"
     },
     "SessionAnalyzerPage": {
-        "title": "🇨🇳 Grande Prêmio da China — Analisador de Sessão",
-        "subtitle": "Circuito Internacional de Xangai · 56 Voltas",
+        "title": "Analisador de Sessao",
+        "subtitle": "Selecione uma sessao para analisar os dados do fim de semana.",
+        "seasonLabel": "Temporada",
+        "raceLabel": "Corrida",
+        "sessionLabel": "Sessão",
         "round": "Etapa",
         "race": "Corrida",
         "lap": "Volta",
@@ -153,7 +177,11 @@
         "team": "Equipe",
         "time": "Tempo",
         "points": "Pontos",
-        "lapNum": "Volta {num}"
+        "lapNum": "Volta {num}",
+        "speedTrapEmpty": "Nenhum dado de speed trap disponivel para esta sessao.",
+        "sessionBest": "Melhor da sessao",
+        "speedTrap": "Speed Trap",
+        "tabResults": "Resultados"
     },
     "RaceWeekendPage": {
         "sessionCompleted": "Sessão Concluída",
@@ -214,5 +242,29 @@
         "typeTeam": "Equipe",
         "typeCircuit": "Circuito",
         "typeSession": "Sessão"
+    },
+    "Sidebar": {
+        "home": "Início",
+        "sessionAnalyzer": "Analisador de Sessão",
+        "driverCompare": "Comparar Pilotos",
+        "liveTiming": "Live Timing",
+        "settings": "Configurações",
+        "f1Analytics": "Analytics da F1",
+        "lightMode": "Modo Claro",
+        "darkMode": "Modo Escuro",
+        "collapse": "Recolher"
+    },
+    "Navbar": {
+        "season2024": "Temporada 2024",
+        "dashboard": "Painel",
+        "searchPlaceholder": "Buscar pilotos, circuitos, sessões...",
+        "noActiveSession": "Nenhuma Sessão Ativa"
+    },
+    "Footer": {
+        "engineTitle": "MOTORSPORT ENGINE",
+        "privacy": "Política de Privacidade",
+        "terms": "Termos de Uso",
+        "cookies": "Configurações de Cookie",
+        "copyright": "© 2024 F1 Insight. Aplicação Não-Oficial."
     }
 }

@@ -1,0 +1,37 @@
+import logging
+import fastf1.internals.f1auth
+import fastf1.livetiming.client
+import time
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger('SignalRCoreTest')
+
+# The extracted token
+USER_TOKEN = "eyJraWQiOiIxIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ.eyJFeHRlcm5hbEF1dGhvcml6YXRpb25zQ29udGV4dERhdGEiOiJCUkEiLCJTdWJzY3JpcHRpb25TdGF0dXMiOiJhY3RpdmUiLCJTdWJzY3JpYmVySWQiOiIyMzE2MjE5ODIiLCJGaXJzdE5hbWUiOiJSYXBoYWVsIiwiZW50cyI6W3siY291bnRyeSI6IkJSQSIsImVudCI6IlJFRyJ9LHsiY291bnRyeSI6IkJSQSIsImVudCI6IlBSRU1JVU0ifV0sIkxhc3ROYW1lIjoiQ2FydmFsaG8iLCJleHAiOjE3NzMxMTU0OTgsIlNlc3Npb25JZCI6ImV5SmhiR2NpT2lKb2RIUndPaTh2ZDNkM0xuY3pMbTl5Wnk4eU1EQXhMekEwTDNodGJHUnphV2N0Ylc5eVpTTm9iV0ZqTFhOb1lUSTFOaUlzSW5SNWNDSTZJa3BYVkNKOS5leUppZFNJNklqRXdNREV4SWl3aWMya2lPaUkyTUdFNVlXUTROQzFsT1ROa0xUUTRNR1l0T0RCa05pMWhaak0zTkRrMFpqSmxNaklpTENKb2RIUndPaTh2YzJOb1pXMWhjeTU0Yld4emIyRndMbTl5Wnk5M2N5OHlNREExTHpBMUwybGtaVzUwYVhSNUwyTnNZV2x0Y3k5dVlXMWxhV1JsYm5ScFptbGxjaUk2SWpJek1UWXlNVGs0TWlJc0ltbGtJam9pWldRMlltSmlOall0TlRjNE9DMDBZMkkyTFRreE9EWXRObUl4TkdFd01tTXlNakl6SWl3aWRDSTZJakVpTENKc0lqb2laVzR0UjBJaUxDSmtZeUk2SWpNMk5EUWlMQ0poWldRaU9pSXlNREkyTFRBekxUSXdWREEwT2pBME9qVTRMak16TUZvaUxDSmtkQ0k2SWpFaUxDSmxaQ0k2SWpJw01qWXRNRFF0TURWVU1EUTZNRFE2TlRndU16TXdXaUlzSW1ObFpDSTZJakVpTENKc0lqb2laVzR0UjBJaUxDSmtZeUk2SWpNMk5EUWlMQ0poWldRaU9pSXlNREkyTFRBekxUSXdWREEwT2pBME9qVTRMak16TUZvaUxDSmtkQ0k2SWpFaUxDSmxaQ0k2SWpJw01qWXRNRFF0TURWVU1EUTZNRFE2TlRndU16TXdXaUlzSW1ObFpDSTZJakVpTENKc0lqb2laVzR0UjBJaUxDSmtZeUk2SWpNMk5EUWlMQ0poWldRaU9pSXlNREkyTFRBekxUSXdWREEwT2pBME9qVTRMak16TUZvaUxDSmtkQ0k2SWpFaUxDSmxaQ0k2SWpJw01qWXRNRFF0TURWVU1EUTZNRFE2TlRndU16TXdXaUlzSW1ObFpDSTZJakVpTENKc0lqb2laVzR0UjBJaUxDSmtZeUk2SWpNMk5EUWlMQ0poWldRaU9pSXlNREkyTFRBekxUSXdWREEwT2pBME9qVTRMak16TUZvaUxDSmtkQ0k2SWpFaUxDSmxaQ0k2SWpJw01qWXRNRFF0TURWVU1EUTZNRFE2TlRndU16TXdXaUlzSW1ObFpDSTZJakI0IiwiaWF0IjoxNzcyNzY5ODk4LCJTdWJzY3JpYmVkUHJvZHVjdCI6IkYxIFRWIFByZW1pdW0gQW5udWFsIiwianRpIjoiN2QyNmVhYTAtMWE5YS00MWM5LWI5NTYtN2MyZmUwODcwMmMzIiwiaGFzaGVkU3Vic2NyaWJlcklkIjoia1wvUmlUaFhCbVVpb0xNS1BoUXNFbFFKSllPdTIzZlhiQ2w0WWJQVFJ0ODQ9In0.R4TZBS7tWe6UpAvHh_wSSOA8lwLh7AOWx3lxjobUw_CS6-unhBzPaJaYsk67FeppziZQ4cSwPT-Z2ultI9dpmPtjNW1V9esm0EhQ3tQJiuG_pt6VIfMfuGjMgK3MmSPtPoTrTxByxm0DS6qbWxL_LYD7EDdn4ka_ZNeuMFUq3E4wOZps_jGg3yqFqy-SLm7-Z3M98Vjm3eb2aUr-zz1bmFiXVWWySBHL5TK5C_Rx_pHsYeP6ZIO_qLdx-D2HvEXppqEZaDd71yepCjqxPku9IrUku-7KdGPCxd5Gs0VHqabL_L9nCZLyvB5aBNM4RZzwm_2nLjw7FrQY1M_n_3V6bw=="
+
+# Monkey patch the get_auth_token function
+def mocked_get_auth_token():
+    print("Mocked auth token returned!")
+    return USER_TOKEN
+
+fastf1.internals.f1auth.get_auth_token = mocked_get_auth_token
+
+class MyClient(fastf1.livetiming.client.SignalRClient):
+    def _on_message(self, msg):
+        print(">>> LIVE DATA RECEIVED <<<")
+        # super()._on_message(msg)
+
+def test_fastf1_patched():
+    client = MyClient("test_data.txt")
+    print("Starting Patched FastF1 Client...")
+    try:
+        client.start()
+    except KeyboardInterrupt:
+        print("Stopping...")
+        client._exit()
+    except Exception as e:
+        print(f"Client failed: {e}")
+
+if __name__ == "__main__":
+    test_fastf1_patched()

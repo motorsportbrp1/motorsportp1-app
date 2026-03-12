@@ -54,20 +54,16 @@ def upload_images():
             with open(local_path, "rb") as f:
                 # Upsert is True so if you update an image, it replaces it
                 try:
-                    # Tenta upload (sem upsert) para pular se já existir
+                    # Tenta upload (com upsert) para substituir se já existir
                     res = supabase.storage.from_(BUCKET_NAME).upload(
                         path=relative_path,
                         file=f,
-                        file_options={"cacheControl": "3600", "upsert": "false", "contentType": content_type}
+                        file_options={"cacheControl": "3600", "upsert": "true", "contentType": content_type}
                     )
                     uploaded += 1
-                    print(f"✅ {relative_path} salvo com sucesso!")
+                    print(f"✅ {relative_path} salvo/atualizado com sucesso!")
                 except Exception as e:
-                    # Se o erro for de arquivo já existente, ignoramos e não mostramos erro crítico
-                    if "already exists" in str(e).lower() or "duplicado" in str(e).lower():
-                        print(f"Skipping {relative_path} - ja existe no banco.")
-                    else:
-                        print(f"❌ Erro ao subir {relative_path}: {e}")
+                    print(f"❌ Erro ao subir {relative_path}: {e}")
 
     print(f"\nFinalizado! {uploaded} novas imagens foram enviadas para o bucket '{BUCKET_NAME}'.")
 

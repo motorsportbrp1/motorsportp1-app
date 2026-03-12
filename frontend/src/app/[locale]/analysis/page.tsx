@@ -17,7 +17,7 @@ const ANALYSIS_MODULES = [
     {
         title: "Session Analyzer",
         description: "Análise profunda de telemetria, stints de pneus e ritmo de corrida de cada sessão.",
-        href: "/analysis/session/2024/5/R",
+        href: "/analysis/session",
         icon: BarChart3,
         color: "#3b82f6",
     },

@@ -55,6 +55,80 @@ def clean_data(val):
     except:
         return str(val)
 
+
+def _timedelta_to_millis(value):
+    if pd.isna(value) or value is pd.NaT:
+        return None
+    if isinstance(value, pd.Timedelta):
+        return int(value.total_seconds() * 1000)
+    return value
+
+
+def get_session_info(session, year: int, round_num: int, session_name: str) -> Dict[str, Any]:
+    event = getattr(session, "event", None)
+
+    def _event_value(key: str, fallback=None):
+        try:
+            if event is None:
+                return fallback
+            if hasattr(event, "get"):
+                value = event.get(key, fallback)
+            else:
+                value = event[key]
+            return fallback if pd.isna(value) else value
+        except Exception:
+            return fallback
+
+    return clean_data({
+        "year": year,
+        "round": _event_value("RoundNumber", round_num),
+        "session_name": getattr(session, "name", session_name),
+        "event_name": _event_value("EventName", ""),
+        "official_event_name": _event_value("OfficialEventName", ""),
+        "country": _event_value("Country", ""),
+        "location": _event_value("Location", ""),
+        "circuit": _event_value("Location", ""),
+        "event_date": _event_value("EventDate", None),
+        "f1_api_support": getattr(session, "f1_api_support", None),
+    })
+
+
+def get_session_results_data(session) -> List[Dict[str, Any]]:
+    try:
+        results = getattr(session, "results", None)
+        if results is None or results.empty:
+            return []
+
+        preferred_columns = [
+            "Position",
+            "ClassifiedPosition",
+            "Abbreviation",
+            "FullName",
+            "TeamName",
+            "TeamColor",
+            "DriverNumber",
+            "GridPosition",
+            "Status",
+            "Points",
+            "Time",
+            "Q1",
+            "Q2",
+            "Q3",
+        ]
+        available_columns = [column for column in preferred_columns if column in results.columns]
+        if not available_columns:
+            return []
+
+        df = results[available_columns].copy()
+        for column in ["Time", "Q1", "Q2", "Q3"]:
+            if column in df.columns:
+                df[column] = df[column].apply(_timedelta_to_millis)
+
+        return clean_data(df.to_dict(orient="records"))
+    except Exception as e:
+        logger.error(f"Error extracting session results: {e}")
+        return []
+
 def get_stints(year: int, round: int, session_name: str, session=None) -> List[Dict[str, Any]]:
     """
     Get all tyre stints for a specific session.
@@ -102,7 +176,7 @@ def get_stints(year: int, round: int, session_name: str, session=None) -> List[D
                 "stint": int(stint_num) if not pd.isna(stint_num) else 1,
                 "compound": str(compound),
                 "laps": total_laps,
-                "avg_lap_time": float(avg_time) if avg_time else None
+                "avg_lap_time": int(avg_time * 1000) if avg_time else None
             })
             
         clean_res = clean_data(results)
@@ -112,7 +186,7 @@ def get_stints(year: int, round: int, session_name: str, session=None) -> List[D
         logger.error(f"Error in get_stints for {year} R{round} {session_name}: {e}")
         return []
 
-def get_all_laps(year: int, round: int, session_name: str) -> List[Dict[str, Any]]:
+def get_all_laps(year: int, round: int, session_name: str, session=None) -> List[Dict[str, Any]]:
     """
     Get all laps for all drivers to plot on a Scatter chart (LapTime vs LapNumber).
     """
@@ -121,20 +195,35 @@ def get_all_laps(year: int, round: int, session_name: str) -> List[Dict[str, Any
         return cached
 
     try:
-        session = get_fastf1_session(year, round, session_name)
+        session = session or get_fastf1_session(year, round, session_name)
         laps = session.laps
         
         if laps.empty:
             return []
             
-        # Select required columns
-        df = laps[["Driver", "LapNumber", "LapTime", "Compound", "Stint", "IsPersonalBest"]].copy()
-        
-        # Convert Timedelta to seconds
-        df['LapTimeSec'] = df['LapTime'].dt.total_seconds()
-        
-        # Drop rows with NaT LapTime
-        df = df.dropna(subset=['LapTimeSec'])
+        preferred_columns = [
+            "Driver",
+            "Team",
+            "LapNumber",
+            "LapTime",
+            "Sector1Time",
+            "Sector2Time",
+            "Sector3Time",
+            "Position",
+            "Compound",
+            "Stint",
+            "IsPersonalBest",
+        ]
+        available_columns = [column for column in preferred_columns if column in laps.columns]
+        df = laps[available_columns].copy()
+
+        # Convert FastF1 timedeltas to milliseconds for the frontend charts.
+        for column in ["LapTime", "Sector1Time", "Sector2Time", "Sector3Time"]:
+            if column in df.columns:
+                df[column] = df[column].apply(_timedelta_to_millis)
+
+        # Drop rows with invalid lap times.
+        df = df.dropna(subset=['LapTime'])
         
         # Convert to list of dicts
         records = df.to_dict(orient="records")
@@ -318,11 +407,11 @@ def get_best_sectors(year: int, round_num: int, session_name: str, session=None)
 
             results.append({
                 "driver": drv,
-                "s1": s1,
+                "s1": int(s1 * 1000) if s1 is not None else None,
                 "s1_color": classify_sector(s1, pb_s1, best_s1),
-                "s2": s2,
+                "s2": int(s2 * 1000) if s2 is not None else None,
                 "s2_color": classify_sector(s2, pb_s2, best_s2),
-                "s3": s3,
+                "s3": int(s3 * 1000) if s3 is not None else None,
                 "s3_color": classify_sector(s3, pb_s3, best_s3),
             })
 
@@ -337,31 +426,23 @@ def get_fastf1_summary_data(year: int, round_num: int, session_name: str) -> Dic
     """
     Unified method to load FastF1 session ONCE, and calculate all 4 widget data sets.
     """
-    # Check if we have all 4 in cache first to skip loading
-    stints_cached = get_cached_data(year, round_num, session_name, 'stints')
-    speeds_cached = get_cached_data(year, round_num, session_name, 'speed_traps')
-    minis_cached = get_cached_data(year, round_num, session_name, 'minisectors')
-    best_cached = get_cached_data(year, round_num, session_name, 'best_sectors')
-    
-    if all(x is not None for x in [stints_cached, speeds_cached, minis_cached, best_cached]):
-        return {
-            "stints": stints_cached,
-            "speed_traps": speeds_cached,
-            "minisectors": minis_cached,
-            "best_sectors": best_cached
-        }
-        
     try:
         # Load exactly once
         session = get_fastf1_session(year, round_num, session_name)
         
         # Calculate with the same session
+        laps = get_all_laps(year, round_num, session_name, session=session)
         stints = get_stints(year, round_num, session_name, session=session)
         speeds = get_speed_traps(year, round_num, session_name, session=session)
         minis = get_minisectors(year, round_num, session_name, session=session)
         best = get_best_sectors(year, round_num, session_name, session=session)
-        
+        session_info = get_session_info(session, year, round_num, session_name)
+        results = get_session_results_data(session)
+
         return {
+            "session_info": session_info,
+            "results": results,
+            "laps": laps,
             "stints": stints,
             "speed_traps": speeds,
             "minisectors": minis,
@@ -370,6 +451,13 @@ def get_fastf1_summary_data(year: int, round_num: int, session_name: str) -> Dic
     except Exception as e:
         logger.error(f"Error generating fastf1 summary for {year} R{round_num} {session_name}: {e}")
         return {
+            "session_info": {
+                "year": year,
+                "round": round_num,
+                "session_name": session_name,
+            },
+            "results": [],
+            "laps": [],
             "stints": [],
             "speed_traps": [],
             "minisectors": [],
