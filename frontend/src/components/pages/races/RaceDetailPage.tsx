@@ -5,11 +5,18 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
 import { handleImageFallback, getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl, getTireImageUrl } from "@/lib/utils";
+import api from "@/services/api";
 
 // Types
 type SessionType = 'fp1' | 'fp2' | 'fp3' | 'sprint_quali' | 'sprint' | 'qualifying' | 'race';
 
-export default function RaceDetailPage({ raceId }: { raceId: string }) {
+interface RaceDetailPageProps {
+    raceId?: string;
+    year?: number;
+    round?: number;
+}
+
+export default function RaceDetailPage({ raceId, year, round }: RaceDetailPageProps) {
     const [loading, setLoading] = useState(true);
     const [race, setRace] = useState<any>(null);
     const [circuit, setCircuit] = useState<any>(null);
@@ -36,16 +43,23 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
         async function loadRaceData() {
             try {
                 // 1. Fetch Race
-                const { data: raceData, error: raceError } = await supabase
-                    .from('races')
-                    .select('*')
-                    .eq('id', raceId)
-                    .single();
+                let raceQuery = supabase.from('races').select('*');
+
+                if (raceId) {
+                    raceQuery = raceQuery.eq('id', raceId);
+                } else if (year && round) {
+                    raceQuery = raceQuery.eq('year', year).eq('round', round);
+                } else {
+                    throw new Error("Race reference not provided");
+                }
+
+                const { data: raceData, error: raceError } = await raceQuery.single();
 
                 if (raceError || !raceData) {
                     throw new Error("Race not found");
                 }
                 setRace(raceData);
+                const resolvedRaceId = raceData.id;
 
                 // 2. Fetch Circuit
                 if (raceData.circuitid) {
@@ -118,7 +132,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                 const { data: resultsData } = await supabase
                     .from('results')
                     .select('*')
-                    .eq('raceid', raceId)
+                    .eq('raceid', resolvedRaceId)
                     .order('positionnumber', { ascending: true, nullsFirst: false });
 
                 if (resultsData) setRaceResults(resultsData.map(enrichResult).sort((a, b) => (a.positiondisplayorder || 999) - (b.positiondisplayorder || 999)));
@@ -127,7 +141,7 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                 const { data: qData } = await supabase
                     .from('qualifying')
                     .select('*')
-                    .eq('raceid', raceId)
+                    .eq('raceid', resolvedRaceId)
                     .order('positionnumber', { ascending: true, nullsFirst: false });
 
                 if (qData) setQualiResults(qData.map(enrichResult));
@@ -136,17 +150,17 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
                 const { data: sData } = await supabase
                     .from('sprint_results')
                     .select('*')
-                    .eq('raceid', raceId)
+                    .eq('raceid', resolvedRaceId)
                     .order('positionnumber', { ascending: true, nullsFirst: false });
 
                 if (sData) setSprintResults(sData.map(enrichResult));
 
                 // 6. Fetch Practice Sessions
                 const [fp1, fp2, fp3, sq] = await Promise.all([
-                    supabase.from('races_free_practice_1_results').select('*').eq('raceid', raceId).order('positionnumber', { ascending: true, nullsFirst: false }),
-                    supabase.from('races_free_practice_2_results').select('*').eq('raceid', raceId).order('positionnumber', { ascending: true, nullsFirst: false }),
-                    supabase.from('races_free_practice_3_results').select('*').eq('raceid', raceId).order('positionnumber', { ascending: true, nullsFirst: false }),
-                    supabase.from('races_sprint_qualifying_results').select('*').eq('raceid', raceId).order('positionnumber', { ascending: true, nullsFirst: false })
+                    supabase.from('races_free_practice_1_results').select('*').eq('raceid', resolvedRaceId).order('positionnumber', { ascending: true, nullsFirst: false }),
+                    supabase.from('races_free_practice_2_results').select('*').eq('raceid', resolvedRaceId).order('positionnumber', { ascending: true, nullsFirst: false }),
+                    supabase.from('races_free_practice_3_results').select('*').eq('raceid', resolvedRaceId).order('positionnumber', { ascending: true, nullsFirst: false }),
+                    supabase.from('races_sprint_qualifying_results').select('*').eq('raceid', resolvedRaceId).order('positionnumber', { ascending: true, nullsFirst: false })
                 ]);
 
                 if (fp1.data) setFp1Results(fp1.data.map(enrichResult));
@@ -161,10 +175,10 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
             }
         }
 
-        if (raceId) {
+        if (raceId || (year && round)) {
             loadRaceData();
         }
-    }, [raceId]);
+    }, [raceId, year, round]);
 
     // Fetch FastF1 Data when activeTab or race changes
     useEffect(() => {
@@ -181,26 +195,17 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
 
             setFastf1Loading(true);
             try {
-                let baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-                if (!baseUrl.endsWith('/api/v1')) {
-                    baseUrl = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/api/v1`;
-                }
+                const data = await api.get(`/sessions/${race.year}/${race.round}/${f1Session}/fastf1-summary`) as {
+                    stints?: any[];
+                    speed_traps?: any[];
+                    minisectors?: any[];
+                    best_sectors?: any[];
+                };
 
-                const response = await fetch(`${baseUrl}/sessions/${race.year}/${race.round}/${f1Session}/fastf1-summary`);
-                if (response.ok) {
-                    const data = await response.json();
-
-                    setStintsData(data.stints || []);
-                    setSpeedTrapsData(data.speed_traps || []);
-                    setMinisectorsData(data.minisectors || []);
-                    setBestSectorsData(data.best_sectors || []);
-                } else {
-                    console.error("Failed to fetch FastF1 summary");
-                    setStintsData([]);
-                    setSpeedTrapsData([]);
-                    setMinisectorsData([]);
-                    setBestSectorsData([]);
-                }
+                setStintsData(data.stints || []);
+                setSpeedTrapsData(data.speed_traps || []);
+                setMinisectorsData(data.minisectors || []);
+                setBestSectorsData(data.best_sectors || []);
 
             } catch (err) {
                 console.error("FastF1 Error:", err);
@@ -945,3 +950,4 @@ export default function RaceDetailPage({ raceId }: { raceId: string }) {
         </div>
     );
 }
+

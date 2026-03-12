@@ -11,6 +11,7 @@ from app.api.v1.races import router as races_router
 from app.api.v1.sessions import router as sessions_router
 from app.api.v1.telemetry import router as telemetry_router
 from app.api.v1.jobs import router as jobs_router
+from app.api.v1.live import router as live_router
 
 v1_router = APIRouter()
 
@@ -22,3 +23,4 @@ v1_router.include_router(races_router)
 v1_router.include_router(sessions_router)
 v1_router.include_router(telemetry_router)
 v1_router.include_router(jobs_router)
+v1_router.include_router(live_router, prefix="/live", tags=["live"])

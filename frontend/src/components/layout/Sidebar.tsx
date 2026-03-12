@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
     Home,
     BarChart3,
@@ -17,18 +18,19 @@ import {
 import { useTheme } from "./ThemeProvider";
 import { useState } from "react";
 
-const navItems = [
-    { href: "/", label: "Home", icon: Home },
-    { href: "/analysis/session/2024/5/R", label: "Session Analyzer", icon: BarChart3 },
-    { href: "/analysis/compare", label: "Driver Compare", icon: GitCompare },
-    { href: "/analysis/live", label: "Live Timing", icon: Radio },
-    { href: "/settings", label: "Settings", icon: Settings },
-];
-
 export default function Sidebar() {
     const pathname = usePathname();
     const { theme, toggleTheme } = useTheme();
     const [collapsed, setCollapsed] = useState(false);
+    const t = useTranslations('Sidebar');
+
+    const navItems = [
+        { href: "/", label: t('home'), icon: Home },
+        { href: "/analysis/session/2024/5/R", label: t('sessionAnalyzer'), icon: BarChart3 },
+        { href: "/analysis/compare", label: t('driverCompare'), icon: GitCompare },
+        { href: "/analysis/live", label: t('liveTiming'), icon: Radio },
+        { href: "/settings", label: t('settings'), icon: Settings },
+    ];
 
     const isActive = (href: string) => {
         if (href === "/") return pathname === "/";
@@ -67,7 +69,7 @@ export default function Sidebar() {
                             className="text-[10px] uppercase tracking-widest"
                             style={{ color: "var(--text-tertiary)" }}
                         >
-                            F1 Analytics
+                            {t('f1Analytics')}
                         </p>
                     </div>
                 )}
@@ -122,7 +124,7 @@ export default function Sidebar() {
                         backgroundColor: "transparent",
                         border: "none",
                     }}
-                    title={collapsed ? (theme === "dark" ? "Light mode" : "Dark mode") : undefined}
+                    title={collapsed ? (theme === "dark" ? t('lightMode') : t('darkMode')) : undefined}
                 >
                     {theme === "dark" ? (
                         <Sun size={20} className="shrink-0" />
@@ -131,7 +133,7 @@ export default function Sidebar() {
                     )}
                     {!collapsed && (
                         <span className="text-sm font-medium">
-                            {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                            {theme === "dark" ? t('lightMode') : t('darkMode')}
                         </span>
                     )}
                 </button>
@@ -152,7 +154,7 @@ export default function Sidebar() {
                     ) : (
                         <>
                             <ChevronLeft size={20} className="shrink-0" />
-                            <span className="text-sm font-medium">Collapse</span>
+                            <span className="text-sm font-medium">{t('collapse')}</span>
                         </>
                     )}
                 </button>

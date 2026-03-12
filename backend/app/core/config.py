@@ -20,9 +20,15 @@ class Settings(BaseSettings):
     # FastF1 (Phase 2+)
     FASTF1_CACHE_DIR: str = "./fastf1_cache"
 
+    # F1TV (Live Timing)
+    F1TV_EMAIL: str = ""
+    F1TV_PASSWORD: str = ""
+    F1TV_SUBSCRIPTION_TOKEN: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 @lru_cache()

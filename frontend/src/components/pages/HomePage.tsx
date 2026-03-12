@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { handleImageFallback, getCountryFlagUrl, getMediaUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { fetchNextRace, fetchLastRacePodium, getConstructorColor } from "@/lib/supabase-queries";
+import { getCurrentSeasonStandings, getLatestRacePodium } from "@/services/openf1";
 
 /* ── Shorthand color helpers ── */
 const C = {
@@ -23,24 +24,7 @@ const C = {
 
 // Supabase client imported from @/lib/supabase
 
-const TEAM_VISUALS: Record<string, { color: string; logoUrl: string }> = {
-    ferrari: { color: "#ff2800", logoUrl: "/ferrari-logo.png" },
-    mercedes: { color: "#00d2be", logoUrl: "/mercedes-logo.png" },
-    mclaren: { color: "#ff8700", logoUrl: "/mclaren-logo.png" },
-    "red-bull": { color: "#0600ef", logoUrl: "/redbull-logo.png" },
-    "aston-martin": { color: "#006f62", logoUrl: "/aston-martin-logo.png" },
-    "alpine": { color: "#0090ff", logoUrl: "/alpine-logo.png" },
-    williams: { color: "#005aff", logoUrl: "/williams-logo.png" },
-    kick: { color: "#52e252", logoUrl: "/kick-logo.png" },
-    rs: { color: "#1e41ff", logoUrl: "/honda-logo.png" },
-    "haas": { color: "#ffffff", logoUrl: "/haas-logo.png" },
-};
-
-const NEWS = [
-    { title: "Verstappen tricampeão de forma espetacular em 2025", time: "2h atrás", category: "Campeonato" },
-    { title: "GP da Austrália promete abrir 2026 com surpresas", time: "4h atrás", category: "Preview" },
-    { title: 'Hamilton: "Preparado para levar a Ferrari ao topo"', time: "6h atrás", category: "Entrevista" },
-];
+// News items are now translated inline in the component rendering
 
 const BARS = [
     { h: 40, color: "#334155" },
@@ -57,49 +41,80 @@ const BARS = [
 type DriverStanding = { id: string; name: string; number: number; team: string; teamColor: string; points: number; wins: number; podiums: number; poles: number; };
 type ConstructorStanding = { id: string; name: string; color: string; points: number; };
 type PodiumDriver = { id: string; name: string; team: string; teamColor: string; pos: number; time: string; };
-type NextRaceInfo = { name: string; country: string; circuitName: string; circuitPlace: string; date: string; laps: number; length: number; fp1Date: string | null; fp1Time: string | null; fp2Date: string | null; fp2Time: string | null; fp3Date: string | null; fp3Time: string | null; qualDate: string | null; qualTime: string | null; raceDate: string | null; raceTime: string | null; year: number; round: number; };
+type NextRaceInfo = { name: string; country: string; circuitName: string; circuitPlace: string; date: string; laps: number; length: number; fp1Date: string | null; fp1Time: string | null; fp2Date: string | null; fp2Time: string | null; fp3Date: string | null; fp3Time: string | null; sprintQualiDate: string | null; sprintQualiTime: string | null; sprintRaceDate: string | null; sprintRaceTime: string | null; qualDate: string | null; qualTime: string | null; raceDate: string | null; raceTime: string | null; year: number; round: number; };
+type PodiumRace = { year: number; round: number; officialname?: string; grands_prix?: { name?: string; fullname?: string } };
+type PodiumState = { race: PodiumRace; podium: PodiumDriver[] };
+type Translate = (key: string) => string;
+type ScheduleEntry = { key: string; date: string; label: string; time: string; highlight: boolean };
+type ScheduleDay = { key: string; title: string; dateLabel: string; isRaceDay: boolean; sessions: ScheduleEntry[] };
 
 export default function HomePage() {
     const t = useTranslations('HomePage');
+    const currentSeasonYear = new Date().getUTCFullYear();
     /* States */
     const [cd, setCd] = useState({ d: 0, h: 0, m: 0, s: 0 });
     const [sessionCd, setSessionCd] = useState("00:00:00");
     const [drivers, setDrivers] = useState<DriverStanding[]>([]);
     const [constructors, setConstructors] = useState<ConstructorStanding[]>([]);
-    const [podiumData, setPodiumData] = useState<{ race: any; podium: PodiumDriver[] } | null>(null);
+    const [podiumData, setPodiumData] = useState<PodiumState | null>(null);
     const [nextRace, setNextRace] = useState<NextRaceInfo | null>(null);
+    const [nextSessionLabel, setNextSessionLabel] = useState("FP1");
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function fetchAll() {
+            setLoading(true);
             try {
-                // Fetch Constructors (latest year with data)
-                const { data: cData } = await supabase.from('seasons_constructor_standings').select('constructorid, points').eq('year', 2025).order('points', { ascending: false }).limit(5);
-                if (cData) {
-                    const cIds = cData.map(c => c.constructorid);
-                    const { data: cNames } = await supabase.from('constructors').select('id, name').in('id', cIds);
-                    setConstructors(cData.map(c => {
-                        const info = cNames?.find(x => x.id === c.constructorid);
-                        return { id: c.constructorid, name: info?.name || c.constructorid, color: getConstructorColor(c.constructorid), points: c.points || 0 };
-                    }));
+                const { constructors: openF1Constructors, drivers: openF1Drivers } = await getCurrentSeasonStandings(currentSeasonYear);
+
+                if (openF1Constructors.length > 0) {
+                    setConstructors(openF1Constructors.slice(0, 5).map((constructor) => ({
+                        id: constructor.id,
+                        name: constructor.name,
+                        color: constructor.color || getConstructorColor(constructor.id),
+                        points: constructor.points,
+                    })));
+                } else {
+                    const { data: cData } = await supabase.from('seasons_constructor_standings').select('constructorid, points').eq('year', currentSeasonYear).order('points', { ascending: false }).limit(5);
+                    if (cData) {
+                        const cIds = cData.map(c => c.constructorid);
+                        const { data: cNames } = await supabase.from('constructors').select('id, name').in('id', cIds);
+                        setConstructors(cData.map(c => {
+                            const info = cNames?.find(x => x.id === c.constructorid);
+                            return { id: c.constructorid, name: info?.name || c.constructorid, color: getConstructorColor(c.constructorid), points: c.points || 0 };
+                        }));
+                    }
                 }
 
-                // Fetch Drivers
-                const { data: dData } = await supabase.from('seasons_driver_standings').select('driverid, points').eq('year', 2025).order('points', { ascending: false }).limit(10);
-                if (dData) {
-                    const dIds = dData.map(d => d.driverid);
-                    const { data: dNames } = await supabase.from('drivers').select('id, name, permanentnumber').in('id', dIds);
-                    const { data: entrants } = await supabase.from('seasons_entrants_drivers').select('driverid, constructorid').eq('year', 2025).in('driverid', dIds);
-                    setDrivers(dData.map(d => {
-                        const info = dNames?.find(x => x.id === d.driverid);
-                        const entrant = entrants?.find(x => x.driverid === d.driverid);
-                        const teamId = entrant?.constructorid || 'unknown';
-                        return { id: d.driverid, name: info?.name || d.driverid, number: parseInt(info?.permanentnumber) || 0, team: String(teamId).replace(/-/g, ' '), teamColor: getConstructorColor(teamId), points: d.points || 0, wins: 0, podiums: 0, poles: 0 };
-                    }));
+                if (openF1Drivers.length > 0) {
+                    setDrivers(openF1Drivers.slice(0, 10).map((driver) => ({
+                        id: driver.id,
+                        name: driver.name,
+                        number: driver.driverNumber,
+                        team: driver.teamName,
+                        teamColor: driver.teamColor,
+                        points: driver.points,
+                        wins: 0,
+                        podiums: 0,
+                        poles: 0,
+                    })));
+                } else {
+                    const { data: dData } = await supabase.from('seasons_driver_standings').select('driverid, points').eq('year', currentSeasonYear).order('points', { ascending: false }).limit(10);
+                    if (dData) {
+                        const dIds = dData.map(d => d.driverid);
+                        const { data: dNames } = await supabase.from('drivers').select('id, name, permanentnumber').in('id', dIds);
+                        const { data: entrants } = await supabase.from('seasons_entrants_drivers').select('driverid, constructorid').eq('year', currentSeasonYear).in('driverid', dIds);
+                        setDrivers(dData.map(d => {
+                            const info = dNames?.find(x => x.id === d.driverid);
+                            const entrant = entrants?.find(x => x.driverid === d.driverid);
+                            const teamId = entrant?.constructorid || 'unknown';
+                            return { id: d.driverid, name: info?.name || d.driverid, number: parseInt(info?.permanentnumber) || 0, team: String(teamId).replace(/-/g, ' '), teamColor: getConstructorColor(teamId), points: d.points || 0, wins: 0, podiums: 0, poles: 0 };
+                        }));
+                    }
                 }
 
-                // Fetch Next Race dynamically
                 const raceData = await fetchNextRace();
+
                 if (raceData) {
                     setNextRace({
                         name: raceData.grands_prix?.fullname || raceData.officialname || t('nextRace'),
@@ -112,14 +127,20 @@ export default function HomePage() {
                         fp1Date: raceData.freepractice1date, fp1Time: raceData.freepractice1time,
                         fp2Date: raceData.freepractice2date, fp2Time: raceData.freepractice2time,
                         fp3Date: raceData.freepractice3date, fp3Time: raceData.freepractice3time,
+                        sprintQualiDate: raceData.sprintqualifyingdate, sprintQualiTime: raceData.sprintqualifyingtime,
+                        sprintRaceDate: raceData.sprintracedate, sprintRaceTime: raceData.sprintracetime,
                         qualDate: raceData.qualifyingdate, qualTime: raceData.qualifyingtime,
                         raceDate: raceData.date, raceTime: raceData.time,
                         year: raceData.year, round: raceData.round,
                     });
                 }
 
-                // Fetch Last Race Podium
-                const podResult = await fetchLastRacePodium();
+                // Fetch last podium from OpenF1 first for the active season.
+                const openF1Podium = await getLatestRacePodium(currentSeasonYear);
+                const podResult = openF1Podium && openF1Podium.podium.length > 0
+                    ? openF1Podium
+                    : await fetchLastRacePodium();
+
                 if (podResult && podResult.podium.length > 0) {
                     const podiumOrdered = [1, 0, 2].map(i => podResult.podium[i]).filter(Boolean);
                     setPodiumData({
@@ -133,22 +154,25 @@ export default function HomePage() {
                             time: p.position === 1 ? (p.time || '') : (p.gap ? `+${p.gap}` : ''),
                         })),
                     });
+                } else {
+                    setPodiumData(null);
                 }
             } catch (err) {
                 console.error('Error fetching home data:', err);
+                setPodiumData(null);
             } finally {
                 setLoading(false);
             }
         }
         fetchAll();
-    }, []);
+    }, [currentSeasonYear, t]);
 
     // Dynamic countdown based on nextRace
     useEffect(() => {
         if (!nextRace?.date) return;
         const raceDate = nextRace.date;
         const raceTime = nextRace.raceTime || '14:00:00';
-        const target = new Date(`${raceDate}T${raceTime}`);
+        const target = new Date(`${raceDate}T${raceTime}Z`);
 
         const tick = () => {
             const diff = target.getTime() - Date.now();
@@ -159,21 +183,27 @@ export default function HomePage() {
                 m: Math.floor((diff % 3600000) / 60000),
                 s: Math.floor((diff % 60000) / 1000),
             });
-            // Next session countdown (FP1 if available)
-            const fp1Target = nextRace.fp1Date ? new Date(`${nextRace.fp1Date}T${nextRace.fp1Time || '10:00:00'}`) : null;
-            const nextSession = fp1Target && fp1Target.getTime() > Date.now() ? fp1Target : target;
-            const sDiff = nextSession.getTime() - Date.now();
+            const sessionCandidates = getSessionCandidates(nextRace, t);
+            const nextSession = sessionCandidates.find((candidate) => candidate.date.getTime() > Date.now()) || {
+                label: t('officialRace'),
+                date: target,
+            };
+            const sDiff = nextSession.date.getTime() - Date.now();
             if (sDiff > 0) {
                 const hh = Math.floor(sDiff / 3600000);
                 const mm = Math.floor((sDiff % 3600000) / 60000);
                 const ss = Math.floor((sDiff % 60000) / 1000);
                 setSessionCd(`${p(hh)}:${p(mm)}:${p(ss)}`);
+                setNextSessionLabel(nextSession.label);
+            } else {
+                setSessionCd("00:00:00");
+                setNextSessionLabel(t('officialRace'));
             }
         };
         tick();
         const id = setInterval(tick, 1000);
         return () => clearInterval(id);
-    }, [nextRace]);
+    }, [nextRace, t]);
 
     /* Driver Modal */
     const [modal, setModal] = useState<DriverStanding | null>(null);
@@ -290,41 +320,39 @@ export default function HomePage() {
                                 <span className="text-xs" style={{ color: C.muted }}>{t('brasiliaTime')}</span>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {/* Práticas */}
-                                <div className="rounded-lg p-4" style={{ background: "rgba(46,48,54,0.5)", border: `1px solid ${C.border}` }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>{t('freePractice')}</div>
-                                    <div className="space-y-3">
-                                        {nextRace?.fp1Date && <ScheduleRow label={`${fmtDate(nextRace.fp1Date)} • ${t('fp1')}`} time={fmtTime(nextRace.fp1Time)} />}
-                                        {nextRace?.fp2Date && <ScheduleRow label={`${fmtDate(nextRace.fp2Date)} • ${t('fp2')}`} time={fmtTime(nextRace.fp2Time)} />}
-                                        {nextRace?.fp3Date && <ScheduleRow label={`${fmtDate(nextRace.fp3Date)} • ${t('fp3')}`} time={fmtTime(nextRace.fp3Time)} />}
-                                        {!nextRace?.fp1Date && !nextRace?.fp2Date && !nextRace?.fp3Date && <span className="text-xs" style={{ color: C.muted }}>{t('tba')}</span>}
-                                    </div>
-                                </div>
-                                {/* Qualifying */}
-                                <div className="rounded-lg p-4" style={{ background: "rgba(46,48,54,0.5)", border: `1px solid ${C.border}` }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>{t('qualifying')}</div>
-                                    <div className="space-y-3">
-                                        {nextRace?.qualDate ? (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-white font-bold">{fmtDate(nextRace.qualDate)} • {t('qualifyingSession')}</span>
-                                                <span className="text-xs font-mono px-2 py-1 rounded text-white" style={{ background: C.primary }}>{fmtTime(nextRace.qualTime)}</span>
+                                {buildWeekendSchedule(nextRace, t).map((day) => (
+                                    <div
+                                        key={day.key}
+                                        className="rounded-lg p-4"
+                                        style={day.isRaceDay
+                                            ? { background: "linear-gradient(to bottom right, rgba(236,19,30,0.2), rgba(236,19,30,0.05))", border: "1px solid rgba(236,19,30,0.3)" }
+                                            : { background: "rgba(46,48,54,0.5)", border: `1px solid ${C.border}` }}
+                                    >
+                                        <div className="flex items-center justify-between gap-3 mb-3">
+                                            <div>
+                                                <div className="text-xs font-bold uppercase" style={{ color: C.primary }}>{day.title}</div>
+                                                <div className="text-sm font-bold text-white">{day.dateLabel}</div>
                                             </div>
-                                        ) : <span className="text-xs" style={{ color: C.muted }}>{t('tba')}</span>}
-                                    </div>
-                                </div>
-                                {/* Race */}
-                                <div className="rounded-lg p-4" style={{ background: "linear-gradient(to bottom right, rgba(236,19,30,0.2), rgba(236,19,30,0.05))", border: "1px solid rgba(236,19,30,0.3)" }}>
-                                    <div className="text-xs font-bold uppercase mb-2" style={{ color: C.primary }}>🏁 {nextRace?.raceDate ? fmtDate(nextRace.raceDate) : t('race')}</div>
-                                    <div className="space-y-3">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-sm text-white font-bold">{t('officialRace')}</span>
-                                            <span className="text-xs font-mono px-2 py-1 rounded text-white" style={{ background: C.primary }}>{nextRace?.raceTime ? fmtTime(nextRace.raceTime) : '—'}</span>
+                                            {day.isRaceDay && (
+                                                <span className="text-[10px] font-bold uppercase px-2 py-1 rounded text-white" style={{ background: C.primary }}>
+                                                    {t('officialRace')}
+                                                </span>
+                                            )}
                                         </div>
-                                        <div className="pt-2" style={{ borderTop: "1px solid #334155" }}>
-                                            <span className="text-xs" style={{ color: C.muted }}>{nextRace?.laps || '—'} {t('laps').toLowerCase()}{nextRace?.length ? ` • ${(nextRace.length * (nextRace.laps || 1)).toFixed(1)} km` : ''}</span>
+                                        <div className="space-y-3">
+                                            {day.sessions.map((session) => (
+                                                <ScheduleRow key={`${day.key}-${session.label}`} label={session.label} time={session.time} highlight={session.highlight} />
+                                            ))}
+                                            {day.isRaceDay && (
+                                                <div className="pt-2" style={{ borderTop: "1px solid #334155" }}>
+                                                    <span className="text-xs" style={{ color: C.muted }}>
+                                                        {nextRace?.laps || '—'} {t('laps').toLowerCase()}{nextRace?.length ? ` • ${(nextRace.length * (nextRace.laps || 1)).toFixed(1)} km` : ''}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
+                                ))}
                             </div>
                         </div>
 
@@ -411,7 +439,7 @@ export default function HomePage() {
                         <div className="rounded-xl overflow-hidden flex flex-col max-h-[800px] card-hover" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                             <div className="p-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${C.border}`, background: "rgba(46,48,54,0.5)" }}>
                                 <h3 className="text-sm font-bold text-white uppercase tracking-wide">{t('driverStandings')}</h3>
-                                <span className="text-[10px] text-white px-2 py-0.5 rounded font-bold" style={{ background: C.primary }}>2025</span>
+                                <span className="text-[10px] text-white px-2 py-0.5 rounded font-bold" style={{ background: C.primary }}>{currentSeasonYear}</span>
                             </div>
                             <div className="flex-1 overflow-y-auto pr-1 scrollbar-hide">
                                 {drivers.map((d, i) => (
@@ -430,7 +458,7 @@ export default function HomePage() {
                                         </div>
                                         <div className="text-right">
                                             <div className="text-sm font-bold w-12 text-right" style={{ color: "#fff" }}>{d.points}</div>
-                                            <div className="text-[10px]" style={{ color: C.dimmed }}>PTS</div>
+                                            <div className="text-[10px]" style={{ color: C.dimmed }}>{t('pts')}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -494,7 +522,7 @@ export default function HomePage() {
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs" style={{ color: C.muted }}>{t('nextSession')}</span>
-                                    <span className="text-xs text-white font-bold">{t('fp1')}</span>
+                                    <span className="text-xs text-white font-bold">{nextSessionLabel}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs" style={{ color: C.muted }}>{t('startsIn')}</span>
@@ -520,13 +548,13 @@ export default function HomePage() {
                         </a>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {NEWS.map((n) => (
-                            <div key={n.title} className="rounded-xl p-4 card-hover cursor-pointer" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+                        {[1, 2, 3].map((n) => (
+                            <div key={`news${n}`} className="rounded-xl p-4 card-hover cursor-pointer" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase" style={{ background: "rgba(236,19,30,0.2)", color: C.primary }}>{n.category}</span>
-                                    <span className="text-[10px]" style={{ color: C.dimmed }}>{n.time}</span>
+                                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase" style={{ background: "rgba(236,19,30,0.2)", color: C.primary }}>{t(`news${n}Category` as never)}</span>
+                                    <span className="text-[10px]" style={{ color: C.dimmed }}>{t(`news${n}Time` as never)}</span>
                                 </div>
-                                <h4 className="text-sm font-bold text-white mb-2">{n.title}</h4>
+                                <h4 className="text-sm font-bold text-white mb-2">{t(`news${n}Title` as never)}</h4>
                                 <a className="text-xs font-bold flex items-center gap-1" href="#" style={{ color: C.primary }}>
                                     {t('readMore')} <span className="material-symbols-outlined text-sm">arrow_forward</span>
                                 </a>
@@ -584,36 +612,109 @@ export default function HomePage() {
 /* ── Helpers ── */
 const p = (n: number) => String(n).padStart(2, "0");
 
-function fmtDate(dateStr: string | null): string {
-    if (!dateStr) return '';
-    const d = new Date(dateStr + 'T12:00:00');
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+function getSessionCandidates(nextRace: NextRaceInfo, t: Translate) {
+    const candidates = [
+        { label: t('fp1'), date: buildSessionDate(nextRace.fp1Date, nextRace.fp1Time) },
+        { label: t('fp2'), date: buildSessionDate(nextRace.fp2Date, nextRace.fp2Time) },
+        { label: t('fp3'), date: buildSessionDate(nextRace.fp3Date, nextRace.fp3Time) },
+        { label: "Sprint Shootout", date: buildSessionDate(nextRace.sprintQualiDate, nextRace.sprintQualiTime) },
+        { label: "Sprint", date: buildSessionDate(nextRace.sprintRaceDate, nextRace.sprintRaceTime) },
+        { label: t('qualifyingSession'), date: buildSessionDate(nextRace.qualDate, nextRace.qualTime) },
+        { label: t('officialRace'), date: buildSessionDate(nextRace.raceDate, nextRace.raceTime) },
+    ];
+
+    return candidates.filter((candidate): candidate is { label: string; date: Date } => Boolean(candidate.date));
 }
 
-function fmtTime(timeStr: string | null): string {
-    if (!timeStr) return '—';
-    return timeStr.substring(0, 5); // "14:00"
+function buildSessionDate(dateStr: string | null, timeStr: string | null) {
+    if (!dateStr) return null;
+    const sessionDate = new Date(`${dateStr}T${timeStr || "10:00:00"}Z`);
+    return Number.isNaN(sessionDate.getTime()) ? null : sessionDate;
 }
 
-function ScheduleRow({ label, time }: { label: string; time: string }) {
+function buildWeekendSchedule(nextRace: NextRaceInfo | null, t: Translate): ScheduleDay[] {
+    if (!nextRace) return [];
+
+    const sessions = [
+        createScheduleEntry(nextRace.fp1Date, nextRace.fp1Time, t('fp1')),
+        createScheduleEntry(nextRace.fp2Date, nextRace.fp2Time, t('fp2')),
+        createScheduleEntry(nextRace.fp3Date, nextRace.fp3Time, t('fp3')),
+        createScheduleEntry(nextRace.sprintQualiDate, nextRace.sprintQualiTime, "Sprint Shootout"),
+        createScheduleEntry(nextRace.sprintRaceDate, nextRace.sprintRaceTime, "Sprint"),
+        createScheduleEntry(nextRace.qualDate, nextRace.qualTime, t('qualifyingSession')),
+        createScheduleEntry(nextRace.raceDate, nextRace.raceTime, t('officialRace'), true),
+    ].filter(Boolean) as ScheduleEntry[];
+
+    const grouped = new Map<string, ScheduleDay>();
+
+    sessions.forEach((session) => {
+        const existing = grouped.get(session.date);
+        const title = fmtWeekday(session.date);
+        const dateLabel = fmtShortDate(session.date);
+        if (existing) {
+            existing.sessions.push(session);
+            existing.isRaceDay = existing.isRaceDay || session.highlight;
+            return;
+        }
+
+        grouped.set(session.date, {
+            key: session.key,
+            title,
+            dateLabel,
+            isRaceDay: session.highlight,
+            sessions: [session],
+        });
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function createScheduleEntry(dateStr: string | null, timeStr: string | null, label: string, highlight = false) {
+    if (!dateStr) return null;
+    return {
+        key: dateStr,
+        date: dateStr,
+        label,
+        time: fmtTime(dateStr, timeStr),
+        highlight,
+    };
+}
+
+function fmtWeekday(dateStr: string): string {
+    const date = new Date(`${dateStr}T12:00:00Z`);
+    return Number.isNaN(date.getTime()) ? "Agenda" : date.toLocaleDateString('pt-BR', { weekday: 'long' });
+}
+
+function fmtShortDate(dateStr: string): string {
+    const date = new Date(`${dateStr}T12:00:00Z`);
+    return Number.isNaN(date.getTime()) ? "TBA" : date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+}
+
+function fmtTime(dateStr: string | null, timeStr: string | null): string {
+    if (!dateStr || !timeStr) return '—';
+    const d = new Date(`${dateStr}T${timeStr}Z`);
+    return Number.isNaN(d.getTime()) ? 'â€”' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function ScheduleRow({ label, time, highlight = false }: { label: string; time: string; highlight?: boolean }) {
     return (
         <div className="flex justify-between items-center">
-            <span className="text-sm" style={{ color: "#cbd5e1" }}>{label}</span>
-            <span className="text-xs font-mono px-2 py-1 rounded" style={{ background: "#334155" }}>{time}</span>
+            <span className="text-sm font-medium" style={{ color: highlight ? "#fff" : "#cbd5e1" }}>{label}</span>
+            <span className="text-xs font-mono px-2 py-1 rounded" style={{ background: highlight ? "var(--primary)" : "#334155", color: "#fff" }}>{time}</span>
         </div>
     );
 }
 
-function PodiumCard({ driver, onClick, t }: { driver: PodiumDriver; onClick: () => void, t: any }) {
+function PodiumCard({ driver, onClick, t }: { driver: PodiumDriver; onClick: () => void, t: Translate }) {
     const isW = driver.pos === 1;
     const avatarCls = isW ? "w-24 h-24 sm:w-28 sm:h-28" : "w-20 h-20 sm:w-24 sm:h-24";
     const pedestalH = isW ? "h-40" : driver.pos === 2 ? "h-32" : "h-28";
     const [imgError, setImgError] = useState(false);
 
-    // Try 2025 first, fallback to 2026/default via getDriverImageUrl
+    // Prefer the current-season render for the home podium.
     const imgUrl = imgError
         ? ''
-        : getDriverImageUrl(driver.id, 2025);
+        : getDriverImageUrl(driver.id, 2026);
 
     return (
         <div className={`podium-card flex flex-col items-center justify-end w-1/3 ${isW ? "z-20" : ""} cursor-pointer`} onClick={onClick}>

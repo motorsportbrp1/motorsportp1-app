@@ -6,6 +6,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
 import { handleImageFallback, getCountryFlagUrl, getTeamLogoUrl, getDriverImageUrl } from "@/lib/utils";
+import { getCurrentSeasonStandings, getMeetingSessions, getMeetings, getSessionDrivers, getSessionResults, isChampionshipMeeting, normalizeOpenF1TeamId } from "@/services/openf1";
 
 
 
@@ -34,6 +35,52 @@ function getTeamColor(id: string): string {
     return TEAM_COLORS[id] || "#94a3b8";
 }
 
+function formatDriverShortName(firstName?: string, lastName?: string, fallback?: string) {
+    if (firstName || lastName) {
+        return `${firstName?.[0] || ""}. ${lastName || ""}`.trim();
+    }
+
+    return fallback || "N/A";
+}
+
+async function getOpenF1CompletedRaceData(year: number) {
+    const meetings = (await getMeetings(year))
+        .filter(isChampionshipMeeting)
+        .sort((a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime());
+    const now = Date.now();
+    const completedMeetings = meetings.filter((meeting) => new Date(meeting.date_end).getTime() <= now);
+
+    const completedRaceData = await Promise.all(completedMeetings.map(async (meeting, index) => {
+        const sessions = await getMeetingSessions(meeting.meeting_key);
+        const raceSession = sessions.find((session) => session.session_name === "Race");
+        const qualifyingSession = sessions.find((session) => session.session_name === "Qualifying");
+
+        if (!raceSession) {
+            return null;
+        }
+
+        const [raceResults, qualifyingResults, drivers] = await Promise.all([
+            getSessionResults(raceSession.session_key),
+            qualifyingSession ? getSessionResults(qualifyingSession.session_key) : Promise.resolve([]),
+            getSessionDrivers(raceSession.session_key),
+        ]);
+
+        const winner = raceResults.find((result) => result.position === 1);
+        const pole = qualifyingResults.find((result) => result.position === 1);
+        const winnerDriver = drivers.find((driver) => driver.driver_number === winner?.driver_number);
+        const poleDriver = drivers.find((driver) => driver.driver_number === pole?.driver_number);
+
+        return {
+            round: index + 1,
+            winner: formatDriverShortName(winnerDriver?.first_name, winnerDriver?.last_name, winnerDriver?.full_name),
+            winnerTeam: normalizeOpenF1TeamId(winnerDriver?.team_name),
+            poleSitter: formatDriverShortName(poleDriver?.first_name, poleDriver?.last_name, poleDriver?.full_name),
+        };
+    }));
+
+    return completedRaceData.filter(Boolean) as Array<{ round: number; winner: string; winnerTeam: string; poleSitter: string }>;
+}
+
 
 
 export default function SeasonDetailPage({ year }: { year: string }) {
@@ -54,6 +101,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
             setLoading(true);
             try {
                 const yr = parseInt(year);
+                const currentSeasonYear = new Date().getUTCFullYear();
 
                 // 1. Fetch all races for this season, including countryId from circuits
                 const { data: racesData } = await supabase
@@ -102,6 +150,14 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                         }
                     });
                 }
+                const openF1CompletedRaces = yr === currentSeasonYear
+                    ? await getOpenF1CompletedRaceData(yr)
+                    : [];
+                const currentSeasonStandings = yr === currentSeasonYear
+                    ? await getCurrentSeasonStandings(yr)
+                    : { drivers: [], constructors: [] };
+
+                openF1CompletedRaces.forEach((race) => completedRoundsSet.add(race.round));
                 setCompletedRaces(completedRoundsSet.size);
 
                 // 3. Fetch driver names for winners and poles
@@ -124,15 +180,25 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                     }
                 }
 
+                const openF1RaceDataByRound: Record<number, { winner: string; winnerTeam: string; poleSitter: string }> = {};
+                openF1CompletedRaces.forEach((race) => {
+                    openF1RaceDataByRound[race.round] = {
+                        winner: race.winner,
+                        winnerTeam: race.winnerTeam,
+                        poleSitter: race.poleSitter,
+                    };
+                });
+
                 // Build enriched races list
                 const enrichedRaces = racesList.map((race: any) => {
                     const rr = raceResultsByRound[race.round];
+                    const openF1Race = openF1RaceDataByRound[race.round];
                     const winnerName = rr?.winnerDriverId && driverNameMap[rr.winnerDriverId]
                         ? `${driverNameMap[rr.winnerDriverId].firstname?.[0]}. ${driverNameMap[rr.winnerDriverId].lastname}`
-                        : null;
+                        : openF1Race?.winner || null;
                     const poleName = rr?.poleDriverId && driverNameMap[rr.poleDriverId]
                         ? `${driverNameMap[rr.poleDriverId].firstname?.[0]}. ${driverNameMap[rr.poleDriverId].lastname}`
-                        : null;
+                        : openF1Race?.poleSitter || null;
 
                     const hasResults = completedRoundsSet.has(race.round);
 
@@ -151,7 +217,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                         } : { month: "—", day: "—" },
                         status: hasResults ? "Finished" : "Upcoming",
                         winner: winnerName,
-                        winnerTeam: rr?.winnerConstructorId || null,
+                        winnerTeam: rr?.winnerConstructorId || openF1Race?.winnerTeam || null,
                         poleSitter: poleName,
                     };
                 });
@@ -216,16 +282,26 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                             teamColor: getTeamColor(teamId),
                         };
                     });
-                setDriverStandings(finalDriverStandings);
+                const currentDriverStandings = finalDriverStandings.length > 0
+                    ? finalDriverStandings
+                    : currentSeasonStandings.drivers.slice(0, 10).map((driver) => ({
+                        pos: driver.position,
+                        name: `${driver.firstName?.[0] || ""}. ${driver.lastName}`.trim(),
+                        pts: driver.points,
+                        team: normalizeOpenF1TeamId(driver.teamName),
+                        teamColor: driver.teamColor || getTeamColor(normalizeOpenF1TeamId(driver.teamName)),
+                    }));
+                setDriverStandings(currentDriverStandings);
 
                 // Set driver leader
-                if (finalDriverStandings.length > 0) {
-                    const leader = finalDriverStandings[0];
+                if (currentDriverStandings.length > 0) {
+                    const leader = currentDriverStandings[0];
                     const leaderDriverObj = Object.values(allDriverNameMap).find(d => `${d.firstname?.[0]}. ${d.lastname}` === leader.name);
+                    const currentLeader = currentSeasonStandings.drivers[0];
                     setDriverLeader({
                         name: leader.name,
                         team: leader.team,
-                        image: leaderDriverObj ? getDriverImageUrl(leaderDriverObj.id, yr) : "",
+                        image: leaderDriverObj ? getDriverImageUrl(leaderDriverObj.id, yr) : (currentLeader ? getDriverImageUrl(currentLeader.id, yr) : ""),
                     });
                 }
 
@@ -258,11 +334,20 @@ export default function SeasonDetailPage({ year }: { year: string }) {
                         pts: s.points,
                         teamColor: getTeamColor(s.constructorid),
                     }));
-                setConstructorStandings(finalConstructorStandings);
+                const currentConstructorStandings = finalConstructorStandings.length > 0
+                    ? finalConstructorStandings
+                    : currentSeasonStandings.constructors.slice(0, 10).map((team) => ({
+                        pos: team.position,
+                        name: team.name,
+                        id: team.id,
+                        pts: team.points,
+                        teamColor: team.color || getTeamColor(team.id),
+                    }));
+                setConstructorStandings(currentConstructorStandings);
 
                 // Constructor leader
-                if (finalConstructorStandings.length > 0) {
-                    const cl = finalConstructorStandings[0];
+                if (currentConstructorStandings.length > 0) {
+                    const cl = currentConstructorStandings[0];
                     setConstructorLeader({
                         name: cl.name,
                         id: cl.id,
@@ -471,7 +556,7 @@ export default function SeasonDetailPage({ year }: { year: string }) {
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                 {races.map((race) => (
-                                    <Link href={`/races/${race.id}`} key={race.id} className={`group relative bg-[var(--surface)] border transition-all rounded-xl overflow-hidden p-4 block ${race.status === "Finished"
+                                    <Link href={`/race/${year}/${race.round}`} key={race.id} className={`group relative bg-[var(--surface)] border transition-all rounded-xl overflow-hidden p-4 block ${race.status === "Finished"
                                         ? "border-[var(--surface-lighter)] hover:border-primary/50"
                                         : "border-[var(--surface-lighter)] hover:border-white/20"
                                         }`}>

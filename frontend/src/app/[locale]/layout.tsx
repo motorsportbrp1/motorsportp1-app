@@ -6,8 +6,8 @@ import { routing } from '@/i18n/routing';
 import "../globals.css";
 
 export const metadata: Metadata = {
-  title: "F1 Insight Engine",
-  description: "Dashboard de Análise de Fórmula 1",
+  title: "MotorSportP1",
+  description: "F1 Analytics Dashboard",
 };
 
 export default async function RootLayout({

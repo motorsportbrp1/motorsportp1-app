@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
@@ -6,12 +6,13 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/lib/supabase";
 import { handleImageFallback, getMediaUrl, getTeamLogoUrl, getDriverImageUrl, getSeasonCardImageUrl } from "@/lib/utils";
+import { getCurrentSeasonStandings, getMeetings, isChampionshipMeeting, normalizeOpenF1TeamId } from "@/services/openf1";
 
 // Era definitions
 const ERAS = [
     { id: "all", label: "Todas as Eras", sublabel: "" },
     { id: "ground-effect", label: "Efeito Solo", sublabel: "(2022-2025)" },
-    { id: "hybrid", label: "Era Híbrida", sublabel: "(2014-2021)" },
+    { id: "hybrid", label: "Era HÃ­brida", sublabel: "(2014-2021)" },
     { id: "v8", label: "Era V8", sublabel: "(2006-2013)" },
     { id: "v10", label: "Era V10", sublabel: "(1996-2005)" },
     { id: "early", label: "Anos Iniciais", sublabel: "(1950-1995)" },
@@ -27,7 +28,7 @@ function getEraForYear(year: number) {
 
 
 
-// ── Constructor visual config ──
+// â”€â”€ Constructor visual config â”€â”€
 function getConstructorColorClass(id: string) {
     const map: Record<string, string> = {
         "mercedes": "bg-teal-800 border-teal-700 text-white",
@@ -68,12 +69,20 @@ export default function SeasonsIndexPage() {
     useEffect(() => {
         async function fetchSeasons() {
             try {
+                const currentSeasonYear = new Date().getUTCFullYear();
+
                 // 1. Fetch all seasons
                 const { data: seasons } = await supabase
                     .from('seasons').select('year')
                     .order('year', { ascending: false });
 
-                // 2. Fetch driver champions (pre-aggregated by season — no duplicates)
+                const [currentSeasonStandings, currentSeasonMeetings] = await Promise.all([
+                    getCurrentSeasonStandings(currentSeasonYear),
+                    getMeetings(currentSeasonYear),
+                ]);
+                const currentSeasonRaceMeetings = currentSeasonMeetings.filter(isChampionshipMeeting);
+
+                // 2. Fetch driver champions (pre-aggregated by season â€” no duplicates)
                 const { data: dChamps } = await supabase
                     .from('seasons_driver_standings')
                     .select('year, driverid')
@@ -199,10 +208,16 @@ export default function SeasonsIndexPage() {
 
                 // Build final seasons data
                 if (seasons) {
-                    const finalData = seasons.map((s: any) => {
+                    const seasonsWithCurrent = seasons.some((season: any) => season.year === currentSeasonYear)
+                        ? seasons
+                        : [{ year: currentSeasonYear }, ...seasons];
+                    const currentDriverLeader = currentSeasonStandings.drivers[0];
+                    const currentConstructorLeader = currentSeasonStandings.constructors[0];
+                    const finalData = seasonsWithCurrent.map((s: any) => {
                         const y = s.year;
                         const dChamp = driverChampionByYear[y];
                         const cChamp = constructorChampionByYear[y];
+                        const isCurrentSeason = y === currentSeasonYear;
 
                         // Resolve champion's team for this year
                         let championTeam = "N/A";
@@ -211,17 +226,24 @@ export default function SeasonsIndexPage() {
                             const teamKey = `${y}_${dChamp.driverid}`;
                             championTeamId = driverTeamByYear[teamKey] || "unknown";
                             championTeam = constructorNameMap[championTeamId] || championTeamId;
+                        } else if (isCurrentSeason && currentDriverLeader) {
+                            championTeamId = normalizeOpenF1TeamId(currentDriverLeader.teamName);
+                            championTeam = currentDriverLeader.teamName || "Em andamento";
                         }
 
                         // Champion full name & image
                         const driverInfo = dChamp ? driverNameMap[dChamp.driverid] : null;
-                        const championName = driverInfo ? `${driverInfo.firstname} ${driverInfo.lastname}` : "N/A";
+                        const championName = driverInfo
+                            ? `${driverInfo.firstname} ${driverInfo.lastname}`
+                            : isCurrentSeason
+                                ? "Temporada inicial"
+                                : "N/A";
                         // Use the champion year for the image (with fallback to generic)
                         const championImage = dChamp ? getDriverImageUrl(dChamp.driverid, y) : "";
 
                         return {
                             year: y,
-                            rounds: roundsPerYear[y] || 0,
+                            rounds: isCurrentSeason ? Math.max(roundsPerYear[y] || 0, currentSeasonRaceMeetings.length) : (roundsPerYear[y] || 0),
                             champion: championName,
                             championDriverId: dChamp?.driverid || "",
                             championImage,
@@ -229,8 +251,12 @@ export default function SeasonsIndexPage() {
                             championTeamId,
                             championTeamColor: getConstructorColorClass(championTeamId),
                             championAbbr: getConstructorAbbr(championTeamId, championTeam),
-                            constructorsChampion: cChamp ? (constructorNameMap[cChamp.constructorid] || cChamp.constructorid) : (y < 1958 ? "—" : "N/A"),
-                            constructorsChampionId: cChamp ? cChamp.constructorid : "",
+                            constructorsChampion: isCurrentSeason && !cChamp
+                                ? (currentConstructorLeader?.name || "Em andamento")
+                                : (cChamp ? (constructorNameMap[cChamp.constructorid] || cChamp.constructorid) : (y < 1958 ? "â€”" : "N/A")),
+                            constructorsChampionId: isCurrentSeason && !cChamp
+                                ? normalizeOpenF1TeamId(currentConstructorLeader?.name)
+                                : (cChamp ? cChamp.constructorid : ""),
                             era: getEraForYear(y),
                         };
                     });
@@ -280,7 +306,7 @@ export default function SeasonsIndexPage() {
                             Biblioteca de Temporadas
                         </h1>
                         <p className="text-white/60 max-w-2xl text-lg">
-                            Explore o histórico completo da Fórmula 1. Acesse os resultados, a telemetria detalhada e a classificação corrida por corrida de campeonatos passados.
+                            Explore o histÃ³rico completo da FÃ³rmula 1. Acesse os resultados, a telemetria detalhada e a classificaÃ§Ã£o corrida por corrida de campeonatos passados.
                         </p>
                     </div>
 
@@ -313,7 +339,7 @@ export default function SeasonsIndexPage() {
 
                     {/* Seasons Grid */}
                     {loading ? (
-                        <div className="flex items-center justify-center py-20 text-white/50">Carregando as temporadas históricas...</div>
+                        <div className="flex items-center justify-center py-20 text-white/50">Carregando as temporadas histÃ³ricas...</div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
                             {filteredSeasons.map((season) => (
@@ -322,12 +348,12 @@ export default function SeasonsIndexPage() {
                                     href={`/seasons/${season.year}`}
                                     className="group relative bg-surface-dark rounded-xl overflow-hidden border border-white/5 hover:border-primary/50 transition-all hover:shadow-2xl hover:shadow-primary/10 flex flex-col"
                                 >
-                                    {/* Badge Ano — dark glass effect */}
+                                    {/* Badge Ano â€” dark glass effect */}
                                     <div className="absolute top-4 left-4 z-10 text-xs font-bold px-3 py-1.5 rounded-md shadow-lg backdrop-blur-md transition-colors" style={{ background: 'rgba(0,0,0,0.7)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.1)' }}>
                                         {season.year}
                                     </div>
 
-                                    {/* Image area — gradient fallback with year */}
+                                    {/* Image area â€” gradient fallback with year */}
                                     <div className="h-48 w-full relative bg-gradient-to-b from-slate-800 to-surface-dark overflow-hidden">
 
                                         {/* Background fallback (year text/image) */}
@@ -387,7 +413,7 @@ export default function SeasonsIndexPage() {
                                         </div>
 
                                         <div className="pt-4 border-t border-white/5 flex justify-between items-center mt-auto">
-                                            <span className="text-xs text-white/40 uppercase tracking-widest leading-tight">Equipe<br />Campeã</span>
+                                            <span className="text-xs text-white/40 uppercase tracking-widest leading-tight">Equipe<br />CampeÃ£</span>
                                             <div className="flex items-center gap-3">
                                                 <span className="text-white text-sm font-bold text-right">{season.constructorsChampion}</span>
                                                 {season.constructorsChampionId && (
@@ -413,7 +439,7 @@ export default function SeasonsIndexPage() {
                         <div className="p-4 border-b border-white/5 bg-surface-darker/50">
                             <h3 className="text-white font-bold text-lg flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary">emoji_events</span>
-                                Títulos de Pilotos
+                                TÃ­tulos de Pilotos
                             </h3>
                         </div>
 
@@ -449,7 +475,7 @@ export default function SeasonsIndexPage() {
                         <div className="p-4 border-b border-white/5 bg-surface-darker/50">
                             <h3 className="text-white font-bold text-lg flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary">engineering</span>
-                                Títulos de Equipes
+                                TÃ­tulos de Equipes
                             </h3>
                         </div>
 
@@ -488,3 +514,4 @@ export default function SeasonsIndexPage() {
         </div>
     );
 }
+

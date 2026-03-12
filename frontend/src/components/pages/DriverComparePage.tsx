@@ -174,7 +174,9 @@ export default function DriverComparePage() {
         series: [
             {
                 type: "line",
-                data: mockDelta.map((d) => [d.distance, d.deltaTime]),
+                data: (telemetryData as any)?.delta?.length
+                    ? (telemetryData as any).delta.map((d: { distance: number; delta: number }) => [d.distance, d.delta])
+                    : mockDelta.map((d) => [d.distance, d.deltaTime]),
                 smooth: true,
                 showSymbol: false,
                 lineStyle: { width: 2 },
@@ -186,7 +188,7 @@ export default function DriverComparePage() {
                 },
             },
         ],
-    }), [d1Info, d2Info]);
+    }), [d1Info, d2Info, telemetryData]);
 
     const tabs = [
         { key: "speed" as const, label: t('tabSpeedTrace'), icon: Zap },

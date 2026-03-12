@@ -2,9 +2,11 @@
 
 import { Search, Bell } from "lucide-react";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 export default function Navbar() {
     const [searchOpen, setSearchOpen] = useState(false);
+    const t = useTranslations('Navbar');
 
     return (
         <header
@@ -22,14 +24,14 @@ export default function Navbar() {
                         className="text-xs uppercase tracking-wider font-medium"
                         style={{ color: "var(--text-tertiary)" }}
                     >
-                        2024 Season
+                        {t('season2024')}
                     </span>
                     <span style={{ color: "var(--text-tertiary)" }}>/</span>
                     <span
                         className="text-sm font-semibold"
                         style={{ color: "var(--text-primary)" }}
                     >
-                        Dashboard
+                        {t('dashboard')}
                     </span>
                 </div>
             </div>
@@ -41,7 +43,7 @@ export default function Navbar() {
                     {searchOpen ? (
                         <input
                             type="text"
-                            placeholder="Search drivers, circuits, sessions..."
+                            placeholder={t('searchPlaceholder')}
                             className="w-64 h-9 pl-9 pr-3 rounded-lg text-sm outline-none transition-all duration-200 animate-fade-in"
                             style={{
                                 backgroundColor: "var(--bg-tertiary)",
@@ -101,7 +103,7 @@ export default function Navbar() {
                         className="text-xs font-medium"
                         style={{ color: "var(--accent-green)" }}
                     >
-                        No Active Session
+                        {t('noActiveSession')}
                     </span>
                 </div>
             </div>

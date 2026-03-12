@@ -76,6 +76,7 @@ def get_session_best_sectors(year: int, round: int, session_name: str):
     """
     try:
         sectors = get_best_sectors(year, round, session_name)
+        return {"best_sectors": sectors}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -90,4 +91,6 @@ def get_fastf1_summary(year: int, round: int, session_name: str):
         return summary_data
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
 

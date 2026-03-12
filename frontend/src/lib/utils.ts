@@ -7,29 +7,45 @@ import { TyreCompound } from "@/types";
 /**
  * Get CSS color for a tyre compound
  */
-export function getCompoundColor(compound: TyreCompound): string {
-    const colors: Record<TyreCompound, string> = {
-        SOFT: "var(--tyre-soft)",
-        MEDIUM: "var(--tyre-medium)",
-        HARD: "var(--tyre-hard)",
-        INTERMEDIATE: "var(--tyre-intermediate)",
-        WET: "var(--tyre-wet)",
+function normalizeCompound(compound: TyreCompound | string): TyreCompound | "UNKNOWN" {
+    const value = String(compound || "").trim().toUpperCase();
+
+    if (value.includes("SOFT") || value === "S") return "SOFT";
+    if (value.includes("MEDIUM") || value === "M") return "MEDIUM";
+    if (value.includes("HARD") || value === "H") return "HARD";
+    if (value.includes("INTER") || value === "I") return "INTERMEDIATE";
+    if (value.includes("WET") || value === "W") return "WET";
+
+    return "UNKNOWN";
+}
+
+export function getCompoundColor(compound: TyreCompound | string): string {
+    const normalized = normalizeCompound(compound);
+    const colors: Record<TyreCompound | "UNKNOWN", string> = {
+        SOFT: "#e10600",
+        MEDIUM: "#ffd000",
+        HARD: "#f3f4f6",
+        INTERMEDIATE: "#43b02a",
+        WET: "#0067ad",
+        UNKNOWN: "#6b7280",
     };
-    return colors[compound] || "var(--text-tertiary)";
+    return colors[normalized];
 }
 
 /**
  * Get a shortened compound name
  */
-export function getCompoundShort(compound: TyreCompound): string {
-    const shorts: Record<TyreCompound, string> = {
+export function getCompoundShort(compound: TyreCompound | string): string {
+    const normalized = normalizeCompound(compound);
+    const shorts: Record<TyreCompound | "UNKNOWN", string> = {
         SOFT: "S",
         MEDIUM: "M",
         HARD: "H",
         INTERMEDIATE: "I",
         WET: "W",
+        UNKNOWN: "?",
     };
-    return shorts[compound] || "?";
+    return shorts[normalized];
 }
 
 /**
@@ -236,6 +252,26 @@ export function getTeamLogoUrl(constructorId: string, year?: number): string {
  */
 export function getCarImageUrl(constructorId: string, year: number | string): string {
     if (!constructorId) return "";
+
+    const normalizedId = constructorId.toLowerCase()
+        .replace(/_/g, '')
+        .replace(/-/g, '');
+
+    const localCars: Record<string, Record<string, string>> = {
+        "2026": {
+            "audi": "2026audicarright.avif",
+            "cadillac": "2026cadillaccarright.avif",
+            "williams": "2026williamscarright.avif"
+        },
+        "2025": {
+            "ferrari": "2025ferraricarright.avif"
+        }
+    };
+
+    if (localCars[year?.toString()] && localCars[year?.toString()][normalizedId]) {
+        return `/images/cars/${localCars[year?.toString()][normalizedId]}`;
+    }
+
     return getMediaUrl('cars', constructorId, `${year}.webp`);
 }
 
@@ -289,23 +325,23 @@ export function getDriverImageUrl(driverId: string, fallbackYear?: number): stri
         "alexander-albon": [2025],
         "arvid-lindblad": [2026],
         "ayrton-senna": [1994],
-        "carlos-sainz": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
-        "carlos-sainz-jr": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+        "carlos-sainz": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
+        "carlos-sainz-jr": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
         "charles-leclerc": [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
         "daniel-ricciardo": [2011, 2020, 2021, 2022, 2023],
         "emerson-fittipaldi": [1975],
         "esteban-ocon": [2022, 2023, 2026],
-        "fernando-alonso": [2005, 2006, 2010, 2014, 2015, 2017, 2021, 2022, 2023, 2024, 2025],
-        "franco-colapinto": [2025],
-        "gabriel-bortoleto": [2025],
+        "fernando-alonso": [2005, 2006, 2010, 2014, 2015, 2017, 2021, 2022, 2023, 2024, 2025, 2026],
+        "franco-colapinto": [2025, 2026],
+        "gabriel-bortoleto": [2025, 2026],
         "george-russell": [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
         "guanyu-zhou": [2023],
-        "isack-hadjar": [2025],
+        "isack-hadjar": [2025, 2026],
         "jack-doohan": [2025],
         "juan-manuel-fangio": [1950],
         "kimi-antonelli": [2025, 2026],
         "kimi-raikkonen": [2007, 2015, 2016, 2019, 2020, 2021],
-        "lance-stroll": [2019, 2020, 2021, 2022, 2023, 2024, 2025],
+        "lance-stroll": [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
         "lando-norris": [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
         "lewis-hamilton": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
         "liam-lawson": [2026],
@@ -313,7 +349,7 @@ export function getDriverImageUrl(driverId: string, fallbackYear?: number): stri
         "max-verstappen": [2015, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
         "michael-schumacher": [2006, 2012],
         "michele-alboreto": [1986],
-        "nico-hulkenberg": [2015, 2019, 2020, 2023, 2024, 2025],
+        "nico-hulkenberg": [2015, 2019, 2020, 2023, 2024, 2025, 2026],
         "nico-rosberg": [2016],
         "oliver-bearman": [2024, 2025],
         "oscar-piastri": [2026],
@@ -327,6 +363,27 @@ export function getDriverImageUrl(driverId: string, fallbackYear?: number): stri
     };
 
     let filename = "2026.webp"; // Default
+
+    const localDrivers: Record<string, string> = {
+        "franco-colapinto": "2026alpinefracol01right.avif",
+        "pierre-gasly": "2026alpinepiegas01right.avif",
+        "fernando-alonso": "2026astonmartinferalo01right.avif",
+        "lance-stroll": "2026astonmartinlanstr01right.avif",
+        "charles-leclerc": "2026ferrarichalec01right.avif",
+        "lewis-hamilton": "2026ferrarilewham01right.avif",
+        "lando-norris": "2026mclarenlannor01right.avif",
+        "kimi-antonelli": "2026mercedesandant01right.avif",
+        "max-verstappen": "2026redbullracingmaxver01right.avif",
+        "alexander-albon": "2026williamsalealb01right.avif",
+        "carlos-sainz": "2026williamscarsai01right.avif",
+        "alain-prost": "alain-prost.jpg",
+        "ayrton-senna": "ayrtons-senna.avif",
+        "michael-schumacher": "michael-schumacher.png",
+    };
+
+    if (localDrivers[normalizedId] && (year >= 2026 || localDrivers[normalizedId].indexOf("2026") === -1)) {
+        return `/images/drivers/${localDrivers[normalizedId]}`;
+    }
 
     if (specialAssets[normalizedId]) {
         const availableYears = specialAssets[normalizedId];
@@ -351,11 +408,15 @@ export function getDriverImageUrl(driverId: string, fallbackYear?: number): stri
  * Get Supabase Storage URL for dynamic media
  */
 export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'seasons-index-cards' | 'circuit-layouts' | 'homepage', id: string, filename: string): string {
-    const isProd = process.env.NODE_ENV === 'production';
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
-    const localBackendUrl = "http://localhost:8000";
 
-    const rootUrl = isProd ? `${supabaseUrl}/storage/v1/object/public/f1-media` : `${localBackendUrl}/media`;
+    // Modificado: Agora usando o Supabase sempre, mesmo em localhost (desenvolvimento) para você conseguir visualizar as imagens recém-upadas no Supabase.
+    // Antes estava fallbacking para localhost:8000 se não estivesse em produção.
+    const rootUrl = `${supabaseUrl}/storage/v1/object/public/f1-media`;
+
+    // Adicionamos este parâmetro para quebrar o cache do navegador e do CDN do Supabase,
+    // forçando a baixar a imagem mais recente que você substituiu mantendo o mesmo nome.
+    const cacheBuster = "?v=1.1";
 
     let normalizedId = id.toLowerCase();
 
@@ -367,10 +428,10 @@ export function getMediaUrl(type: 'drivers' | 'cars' | 'teams' | 'tracks' | 'sea
     }
 
     if (type === 'circuit-layouts' || type === 'homepage') {
-        return `${rootUrl}/${type}/${filename}`;
+        return `${rootUrl}/${type}/${filename}${cacheBuster}`;
     }
 
-    return `${rootUrl}/${type}/${normalizedId}/${filename}`;
+    return `${rootUrl}/${type}/${normalizedId}/${filename}${cacheBuster}`;
 }
 
 /**
@@ -407,12 +468,11 @@ export function getSeasonCardImageUrl(year: number): string {
     };
 
     if (KNOWN_CARDS[year]) {
-        const isProd = process.env.NODE_ENV === 'production';
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
-        const localBackendUrl = "http://localhost:8000";
 
-        const rootUrl = isProd ? `${supabaseUrl}/storage/v1/object/public/f1-media` : `${localBackendUrl}/media`;
-        return `${rootUrl}/seasons-index-cards/${KNOWN_CARDS[year]}`;
+        const rootUrl = `${supabaseUrl}/storage/v1/object/public/f1-media`;
+        const cacheBuster = "?v=1.1";
+        return `${rootUrl}/seasons-index-cards/${KNOWN_CARDS[year]}${cacheBuster}`;
     }
 
     return "";
@@ -424,17 +484,23 @@ export function getSeasonCardImageUrl(year: number): string {
  */
 export function handleImageFallback(e: React.SyntheticEvent<HTMLImageElement, Event>) {
     const img = e.currentTarget;
-    const currentSrc = img.src;
+    let currentSrc = img.src;
+
+    // Remover cacheBuster para a checagem de extensões caso ele exista
+    const cacheBuster = "?v=1.1";
+    if (currentSrc.includes(cacheBuster)) {
+        currentSrc = currentSrc.replace(cacheBuster, "");
+    }
 
     // Prevent infinite loops if the fallback itself fails
     if (img.dataset.failed) return;
 
     if (currentSrc.includes('.webp')) {
-        img.src = currentSrc.replace('.webp', '.png');
+        img.src = currentSrc.replace('.webp', '.png') + cacheBuster;
     } else if (currentSrc.includes('.png')) {
-        img.src = currentSrc.replace('.png', '.jpg');
+        img.src = currentSrc.replace('.png', '.jpg') + cacheBuster;
     } else if (currentSrc.includes('.jpg')) {
-        img.src = currentSrc.replace('.jpg', '.jpeg');
+        img.src = currentSrc.replace('.jpg', '.jpeg') + cacheBuster;
     } else {
         // All known extensions failed, mark it to avoid looping
         img.dataset.failed = 'true';
@@ -452,13 +518,12 @@ export function handleImageFallback(e: React.SyntheticEvent<HTMLImageElement, Ev
  * Get Tire Image URL from Supabase Storage
  */
 export function getTireImageUrl(compound: TyreCompound | string): string {
-    const isProd = process.env.NODE_ENV === 'production';
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://zpoiazqcfawbozfzweym.supabase.co";
-    const localBackendUrl = "http://localhost:8000";
 
-    const rootUrl = isProd ? `${supabaseUrl}/storage/v1/object/public/f1-media` : `${localBackendUrl}/media`;
+    const rootUrl = `${supabaseUrl}/storage/v1/object/public/f1-media`;
 
-    const c = compound.toLowerCase();
+    const normalized = normalizeCompound(compound);
+    const c = normalized.toLowerCase();
     let filename = "pirelli-soft.png";
     if (c.includes("soft")) filename = "pirelli-soft.png";
     else if (c.includes("medium")) filename = "pirelli-medium.png";
@@ -466,5 +531,5 @@ export function getTireImageUrl(compound: TyreCompound | string): string {
     else if (c.includes("inter")) filename = "pirelli-inter.png";
     else if (c.includes("wet")) filename = "pirelli-wet.png";
 
-    return `${rootUrl}/tires/${filename}`;
+    return `${rootUrl}/tires/${filename}?v=1.1`;
 }

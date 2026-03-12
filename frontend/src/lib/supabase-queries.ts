@@ -51,43 +51,57 @@ export async function fetchNextRace() {
 // ── Last Race Podium ──
 export async function fetchLastRacePodium() {
     const today = new Date().toISOString().split("T")[0];
+    const currentYear = new Date().getUTCFullYear();
 
-    // Get last completed race
-    const { data: lastRaces } = await supabase
-        .from("races")
-        .select("id, year, round, grandprixid, officialname, grands_prix:grandprixid(name, fullname)")
-        .lte("date", today)
-        .order("date", { ascending: false })
-        .limit(1);
+    async function findLatestRaceWithResults(year?: number) {
+        let query = supabase
+            .from("races")
+            .select("id, year, round, grandprixid, officialname, grands_prix:grandprixid(name, fullname)")
+            .lte("date", today)
+            .order("date", { ascending: false })
+            .order("time", { ascending: false })
+            .limit(8);
 
-    const lastRace = lastRaces?.[0];
-    if (!lastRace) return null;
+        if (year) {
+            query = query.eq("year", year);
+        }
 
-    // Get top 3 results
-    const { data: podium } = await supabase
-        .from("results")
-        .select("positionnumber, driverid, constructorid, time, timemillis, gap, points, drivers:driverid(name, firstname, lastname, abbreviation, permanentnumber)")
-        .eq("raceid", lastRace.id)
-        .lte("positionnumber", 3)
-        .order("positionnumber", { ascending: true });
+        const { data: races } = await query;
+        if (!races?.length) return null;
 
-    return {
-        race: lastRace,
-        podium: (podium || []).map((r: any) => ({
-            position: r.positionnumber,
-            driverId: r.driverid,
-            driverName: r.drivers?.name || r.driverid,
-            firstName: r.drivers?.firstname || "",
-            lastName: r.drivers?.lastname || "",
-            abbreviation: r.drivers?.abbreviation || "",
-            number: r.drivers?.permanentnumber || 0,
-            constructorId: r.constructorid,
-            teamColor: getConstructorColor(r.constructorid),
-            time: r.time || "",
-            gap: r.gap || "",
-            points: r.points || 0,
-        })),
-    };
+        for (const race of races) {
+            const { data: podium } = await supabase
+                .from("results")
+                .select("positionnumber, driverid, constructorid, time, timemillis, gap, points, drivers:driverid(name, firstname, lastname, abbreviation, permanentnumber)")
+                .eq("raceid", race.id)
+                .lte("positionnumber", 3)
+                .order("positionnumber", { ascending: true });
+
+            if (podium && podium.length > 0) {
+                return {
+                    race,
+                    podium: podium.map((r: any) => ({
+                        position: r.positionnumber,
+                        driverId: r.driverid,
+                        driverName: r.drivers?.name || r.driverid,
+                        firstName: r.drivers?.firstname || "",
+                        lastName: r.drivers?.lastname || "",
+                        abbreviation: r.drivers?.abbreviation || "",
+                        number: r.drivers?.permanentnumber || 0,
+                        constructorId: r.constructorid,
+                        teamColor: getConstructorColor(r.constructorid),
+                        time: r.time || "",
+                        gap: r.gap || "",
+                        points: r.points || 0,
+                    })),
+                };
+            }
+        }
+
+        return null;
+    }
+
+    return (await findLatestRaceWithResults(currentYear)) || (await findLatestRaceWithResults()) || null;
 }
 
 // ── Race Schedule for a Season ──

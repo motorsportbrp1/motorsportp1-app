@@ -1,340 +1,467 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Radio, Flag, AlertTriangle, Wifi, History, ChevronDown } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Flag, AlertTriangle, Wifi, Activity, Volume2, AlertOctagon } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { getCompoundColor, getCompoundShort } from "@/lib/utils";
-import { fetchReplayData, fetchAvailableRacesForReplay } from "@/lib/supabase-queries";
-import { LiveTimingState, LiveDriver, RaceControlMessage } from "@/types";
 import { useTranslations } from "next-intl";
+import LiveTrackMap from './LiveTrackMap';
+import { OpenF1Session, OpenF1Driver, OpenF1Location, OpenF1RaceControl, getLatestSession } from "@/services/openf1";
+
+// WebSocket baseline
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const WS_URL = API_BASE_URL.replace(/^http/i, "ws").replace(/\/api\/v1\/?$/, "/api/v1/live/ws");
+
+// Interfaces adaptadas para a UI
+interface LiveUIRow {
+    driverNumber: number;
+    position: number;
+    teamColor: string;
+    abbreviation: string;
+    team: string;
+    gap: string;
+    interval: string;
+}
 
 export default function LiveTimingPage() {
     const t = useTranslations('LiveTimingPage');
-    const [state, setState] = useState<LiveTimingState | null>(null);
-    const [availableRaces, setAvailableRaces] = useState<any[]>([]);
-    const [selectedRace, setSelectedRace] = useState<{ year: number; round: number } | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [showPicker, setShowPicker] = useState(false);
 
-    // Fetch available races for the dropdown
+    const [session, setSession] = useState<OpenF1Session | null>(null);
+    const [driversMap, setDriversMap] = useState<Map<number, OpenF1Driver>>(new Map());
+    const [locationsMap, setLocationsMap] = useState<Map<number, OpenF1Location>>(new Map());
+    const [tableData, setTableData] = useState<LiveUIRow[]>([]);
+    const [messages, setMessages] = useState<OpenF1RaceControl[]>([]);
+    const [teamRadios, setTeamRadios] = useState<any[]>([]);
+
+    const [loading, setLoading] = useState(true);
+    const [lastSync, setLastSync] = useState<Date>(new Date());
+    const socketRef = useRef<WebSocket | null>(null);
+
+    // Bootstrap basic session data if available (optional, but good for context)
     useEffect(() => {
-        async function loadRaces() {
-            const races = await fetchAvailableRacesForReplay(30);
-            setAvailableRaces(races);
-            // Auto-select the most recent race
-            if (races.length > 0) {
-                const latest = races[0];
-                setSelectedRace({ year: latest.year, round: latest.round });
-            }
+        async function fetchInitial() {
+            const latestSession = await getLatestSession();
+            setSession(latestSession ?? {
+                session_key: 9999,
+                session_name: "Live Session (F1TV Stream)",
+                date_start: new Date().toISOString(),
+                date_end: new Date().toISOString(),
+                year: new Date().getFullYear(),
+                country_name: "Live",
+                circuit_short_name: "Active Track"
+            });
+            setLoading(false);
         }
-        loadRaces();
+        fetchInitial();
     }, []);
 
-    // Fetch replay data when race is selected
+    // WebSocket Management
     useEffect(() => {
-        if (!selectedRace) return;
-        async function loadReplay() {
-            setLoading(true);
+        if (loading) return;
+
+        const socket = new WebSocket(WS_URL);
+        socketRef.current = socket;
+
+        socket.onopen = () => {
+            console.log("Connected to MotorsportP1 Live Proxy");
+        };
+
+        socket.onmessage = (event) => {
             try {
-                const data = await fetchReplayData(selectedRace!.year, selectedRace!.round);
-                if (data) {
-                    setState({
-                        sessionStatus: "Finalised",
-                        trackStatus: "AllClear",
-                        timestamp: new Date().toISOString(),
-                        currentLap: data.race.totalLaps,
-                        totalLaps: data.race.totalLaps,
-                        drivers: data.drivers as LiveDriver[],
-                        raceControlMessages: generateReplayMessages(data),
-                    });
+                const message = JSON.parse(event.data);
+                if (message.type === 'feed' && message.data) {
+                    processLiveFeed(message.data);
+                    setLastSync(new Date());
                 }
             } catch (err) {
-                console.error("Error loading replay:", err);
-            } finally {
-                setLoading(false);
+                console.error("WS Message Error:", err);
             }
-        }
-        loadReplay();
-    }, [selectedRace]);
+        };
 
-    // Generate race control messages from result data
-    function generateReplayMessages(data: any): RaceControlMessage[] {
-        const messages: RaceControlMessage[] = [];
-        messages.push({ utc: new Date().toISOString(), category: "Flag", message: t('msgChequeredFlag'), flag: "CHECKERED" });
+        socket.onclose = () => {
+            console.log("Disconnected from MotorsportP1 Live Proxy");
+            // Reconnect logic could be added here
+        };
 
-        const retiredDrivers = data.drivers.filter((d: any) => d.retired);
-        retiredDrivers.forEach((d: any) => {
-            messages.push({ utc: new Date().toISOString(), category: "CarEvent", message: `${d.abbreviation} — ${t('msgRetired')}`, flag: "YELLOW" });
+        return () => {
+            socket.close();
+        };
+    }, [loading]);
+
+    // Data Processing logic for F1 SignalR
+    function processLiveFeed(items: any[]) {
+        items.forEach(item => {
+            const { method, data } = item;
+
+            // Handle Position Data
+            if (method === "Position.z") {
+                // SignalR Position.z structure: { Position: [ { Timestamp: "...", Entries: { "44": { "Line": [...] } } } ] }
+                if (data?.Position) {
+                    setLocationsMap(prev => {
+                        const newMap = new Map(prev);
+                        data.Position.forEach((pos: any) => {
+                            Object.entries(pos.Entries).forEach(([driverNum, detail]: [string, any]) => {
+                                const lastLine = detail.Line?.[detail.Line.length - 1];
+                                if (lastLine) {
+                                    newMap.set(parseInt(driverNum), {
+                                        driver_number: parseInt(driverNum),
+                                        date: pos.Timestamp,
+                                        x: lastLine.X,
+                                        y: lastLine.Y,
+                                        z: lastLine.Z,
+                                        session_key: session?.session_key ?? 0
+                                    } as any);
+                                }
+                            });
+                        });
+                        return newMap;
+                    });
+                }
+            }
+
+            // Handle Timing Data
+            if (method === "TimingData") {
+                // TimingData update: { Lines: { "44": { "GapToLeader": "+1.2s", "IntervalToNext": "+0.5s", "Position": 1 } } }
+                if (data?.Lines) {
+                    setTableData(prev => {
+                        const existing = new Map(prev.map(row => [row.driverNumber, row]));
+
+                        Object.entries(data.Lines).forEach(([num, timing]: [string, any]) => {
+                            const dNum = parseInt(num);
+                            const driver = driversMap.get(dNum);
+                            if (!driver) return;
+
+                            const current = existing.get(dNum);
+                            existing.set(dNum, {
+                                driverNumber: dNum,
+                                position: timing.Position ?? current?.position ?? 0,
+                                teamColor: driver.team_colour ? `#${driver.team_colour}` : (current?.teamColor ?? "#999"),
+                                abbreviation: driver.name_acronym,
+                                team: driver.team_name,
+                                gap: timing.GapToLeader ?? current?.gap ?? "—",
+                                interval: timing.IntervalToNext ?? current?.interval ?? "—"
+                            });
+                        });
+
+                        return Array.from(existing.values()).sort((a, b) => a.position - b.position);
+                    });
+                }
+            }
+
+            // Handle Race Control Messages
+            if (method === "RaceControlMessages") {
+                if (data?.Messages) {
+                    setMessages(prev => {
+                        const newMsgs = [...(data.Messages as any[])];
+                        // Convert SignalR message to OpenF1 format for compatibility
+                        const normalized = newMsgs.map(m => ({
+                            date: m.Utc,
+                            message: m.Message,
+                            category: m.Category,
+                            flag: m.Flag,
+                            session_key: session?.session_key ?? 0
+                        } as any));
+
+                        const merged = [...normalized, ...prev].slice(0, 50); // Keep last 50
+                        return merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    });
+                }
+            }
+
+            // Handle Driver List
+            if (method === "DriverList" && data) {
+                setDriversMap(prev => {
+                    const newMap = new Map(prev);
+                    // F1TV DriverList format is an object of drivers with car number as keys
+                    Object.entries(data).forEach(([carStr, driverData]: [string, any]) => {
+                        const dNum = parseInt(carStr);
+                        if (!isNaN(dNum)) {
+                            newMap.set(dNum, {
+                                session_key: session?.session_key ?? 0,
+                                meeting_key: 0,
+                                driver_number: dNum,
+                                broadcast_name: driverData.BroadcastName ?? 'Unknown',
+                                full_name: driverData.FullName ?? 'Unknown',
+                                name_acronym: driverData.Tla ?? 'UNK',
+                                team_name: driverData.TeamName ?? 'Unknown',
+                                team_colour: driverData.TeamColour ?? '999999',
+                            });
+                        }
+                    });
+                    return newMap;
+                });
+            }
+            // Handle Team Radio
+            if (method === "TeamRadio" && data?.Captures) {
+                setTeamRadios(prev => {
+                    const newRadios = [...data.Captures];
+                    const merged = [...newRadios, ...prev].slice(0, 20); // Maintain last 20
+                    return merged.sort((a, b) => new Date(b.Utc).getTime() - new Date(a.Utc).getTime());
+                });
+            }
         });
-
-        const winner = data.drivers.find((d: any) => d.position === 1);
-        if (winner) {
-            messages.push({ utc: new Date().toISOString(), category: "Other", message: `${winner.abbreviation} ${t('msgWinsRace')}`, flag: "GREEN" });
-        }
-        messages.push({ utc: new Date().toISOString(), category: "Flag", message: t('msgDrsEnabled'), flag: null });
-        messages.push({ utc: new Date().toISOString(), category: "Flag", message: t('msgGreenFlag'), flag: "GREEN" });
-        return messages;
     }
 
-    const currentRaceLabel = availableRaces.find(r => r.year === selectedRace?.year && r.round === selectedRace?.round);
-
-    const getSectorColor = (status: string | undefined) => {
-        switch (status) {
-            case "purple": return "var(--sector-purple)";
-            case "green": return "var(--sector-green)";
-            case "yellow": return "var(--sector-yellow)";
-            default: return "var(--text-tertiary)";
-        }
-    };
-
-    const getSectorBg = (status: string | undefined) => {
-        switch (status) {
-            case "purple": return "rgba(168, 85, 247, 0.15)";
-            case "green": return "rgba(34, 197, 94, 0.15)";
-            case "yellow": return "rgba(234, 179, 8, 0.12)";
-            default: return "transparent";
-        }
-    };
-
     return (
-        <>
+        <div className="bg-[#1a1b1e] text-slate-100 min-h-screen flex flex-col font-display">
             <Header />
-            <main className="flex-grow p-6 max-w-[1400px] mx-auto w-full">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="page-title">
-                            <History
-                                size={24}
-                                className="inline"
-                                style={{ color: "var(--f1-red)", verticalAlign: "middle", marginRight: 8 }}
-                            />
-                            {t('title')}
-                        </h1>
-                        <p className="page-subtitle">
-                            {currentRaceLabel?.grands_prix?.name || currentRaceLabel?.officialname || t('selectRace')} — {t('finalClassification')}
-                            {state && ` · ${state.totalLaps} ${t('laps')}`}
+            <main className="flex-grow p-4 lg:p-8 max-w-[1500px] mx-auto w-full">
+
+                {/* Header Superior */}
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 pb-6 border-b border-white/5 gap-6">
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-[#2a2b30] text-slate-300 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-widest border border-white/5">
+                                {session ? `${session.country_name} — ${session.circuit_short_name}` : t('connectingOpenF1')}
+                            </span>
+                            <span className="bg-[#e81932]/20 text-[#e81932] border border-[#e81932]/20 px-2 py-0.5 rounded text-[10px] flex items-center gap-1 uppercase font-bold tracking-widest">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#e81932] animate-pulse"></span>
+                                {t('live')}
+                            </span>
+                        </div>
+                        <h2 className="text-4xl font-bold text-white tracking-tight flex items-center gap-3">
+                            {session ? session.session_name : t('title')}
+                        </h2>
+                        <p className="text-slate-400 text-sm mt-1 font-medium flex items-center gap-2">
+                            <Wifi size={14} className="text-green-500 animate-pulse" />
+                            {t('connectedStream')}
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        {/* Race Picker */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowPicker(!showPicker)}
-                                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                                style={{
-                                    backgroundColor: "var(--bg-tertiary)",
-                                    border: "1px solid var(--border-primary)",
-                                    color: "var(--text-primary)",
-                                }}
-                            >
-                                <History size={14} />
-                                {currentRaceLabel?.grands_prix?.name || t('selectRace')}
-                                <ChevronDown size={14} />
-                            </button>
-                            {showPicker && (
-                                <div
-                                    className="absolute right-0 top-full mt-2 z-50 rounded-xl overflow-hidden shadow-2xl max-h-96 overflow-y-auto w-80"
-                                    style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-primary)" }}
-                                >
-                                    {availableRaces.map((race) => (
-                                        <button
-                                            key={`${race.year}-${race.round}`}
-                                            className="w-full text-left px-4 py-3 text-sm flex items-center justify-between transition-colors"
-                                            style={{
-                                                borderBottom: "1px solid var(--border-primary)",
-                                                color: "var(--text-primary)",
-                                                backgroundColor: selectedRace?.year === race.year && selectedRace?.round === race.round
-                                                    ? "rgba(225, 6, 0, 0.1)"
-                                                    : "transparent",
-                                            }}
-                                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--bg-card-hover)")}
-                                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = selectedRace?.year === race.year && selectedRace?.round === race.round ? "rgba(225, 6, 0, 0.1)" : "transparent")}
-                                            onClick={() => { setSelectedRace({ year: race.year, round: race.round }); setShowPicker(false); }}
-                                        >
-                                            <div>
-                                                <div className="font-bold">{race.grands_prix?.name || race.officialname}</div>
-                                                <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>{t('round')} {race.round} · {race.year}</div>
-                                            </div>
-                                            <span className="text-xs font-mono" style={{ color: "var(--text-tertiary)" }}>{race.date}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Replay badge */}
-                        <div
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-                            style={{
-                                backgroundColor: "rgba(59, 130, 246, 0.1)",
-                                border: "1px solid rgba(59, 130, 246, 0.3)",
-                            }}
-                        >
-                            <History size={12} style={{ color: "var(--accent-blue)" }} />
-                            <span className="text-xs font-medium" style={{ color: "var(--accent-blue)" }}>
-                                {t('replayMode')}
-                            </span>
+                    <div className="flex items-center gap-3 bg-[#232429] border border-[#303238] rounded-xl px-4 py-2">
+                        <Activity size={16} className="text-slate-400" />
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{t('lastSync')}</span>
+                            <span className="text-xs font-mono text-white">{loading ? '--:--:--' : lastSync.toLocaleTimeString()}</span>
                         </div>
                     </div>
                 </div>
 
                 {loading ? (
-                    <div className="flex items-center justify-center py-20">
-                        <div className="text-center">
-                            <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: "var(--f1-red)", borderTopColor: "transparent" }} />
-                            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>{t('loadingRace')}</p>
-                        </div>
+                    <div className="flex flex-col items-center justify-center py-32">
+                        <div className="w-12 h-12 border-4 border-t-transparent border-[#e81932] rounded-full animate-spin mb-4" />
+                        <p className="text-sm font-mono text-slate-400 tracking-widest uppercase">{t('connectingTiming')}</p>
                     </div>
-                ) : state ? (
-                    <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-                        {/* Timing Table — 3/4 */}
-                        <div className="xl:col-span-3">
-                            <div className="card p-0 overflow-hidden">
-                                <div className="overflow-x-auto" style={{ minWidth: 0 }}>
-                                    <table className="w-full text-sm" style={{ minWidth: 800 }}>
-                                        <thead>
-                                            <tr
-                                                style={{
-                                                    borderBottom: "2px solid var(--border-primary)",
-                                                    backgroundColor: "var(--bg-tertiary)",
-                                                }}
-                                            >
-                                                {[t('pos'), "", t('driver'), t('gap'), t('int'), t('bestLap'), t('pits'), t('status')].map((h, i) => (
-                                                    <th
-                                                        key={i}
-                                                        className={`py-3 px-3 font-medium text-[11px] uppercase tracking-wider ${[t('pos'), t('pits')].includes(h) ? "text-center" : "text-left"}`}
-                                                        style={{ color: "var(--text-tertiary)" }}
-                                                    >
-                                                        {h}
-                                                    </th>
-                                                ))}
+                ) : !session ? (
+                    <div className="text-center py-32 bg-[#111111] border border-white/5 rounded-xl shadow-2xl">
+                        <p className="text-slate-400">{t('noActiveSessions')}</p>
+                        <p className="text-sm text-slate-500 mt-2">{t('waitingSession')}</p>
+                    </div>
+                ) : (
+                    <div className="flex w-full flex-col gap-4">
+
+                        {/* Top Row: Leaderboard (Left) + Map (Right) */}
+                        <div className="flex w-full flex-col gap-4 xl:flex-row">
+
+                            {/* Timing Table */}
+                            <div className="w-full xl:w-[500px] shrink-0 bg-[#111111] border border-white/5 rounded-xl shadow-2xl overflow-hidden flex flex-col xl:max-h-[850px]">
+                                <div className="overflow-x-auto overflow-y-auto w-full no-scrollbar flex-grow">
+                                    <table className="w-full text-left border-collapse min-w-[450px]">
+                                        <thead className="sticky top-0 bg-[#111111] z-10 shadow-md">
+                                            <tr className="text-[10px] text-slate-500 uppercase tracking-widest font-bold border-b border-white/5">
+                                                <th className="py-3 text-center w-12">{t('pos')}</th>
+                                                <th className="py-3 pl-4">{t('driver')}</th>
+                                                <th className="py-3 text-right pr-4">{t('gap')}</th>
+                                                <th className="py-3 text-right pr-4">{t('interval')}</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            {state.drivers.map((driver, idx) => (
-                                                <tr
-                                                    key={driver.driverNumber}
-                                                    className="transition-colors duration-150"
-                                                    style={{
-                                                        borderBottom: idx < state.drivers.length - 1 ? "1px solid var(--border-primary)" : "none",
-                                                        opacity: driver.retired ? 0.4 : 1,
-                                                    }}
-                                                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--bg-card-hover)")}
-                                                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-                                                >
-                                                    {/* Position */}
-                                                    <td className="py-2.5 px-3 text-center">
-                                                        <span className="font-bold" style={{ color: driver.position <= 3 ? "var(--f1-red)" : "var(--text-primary)" }}>
-                                                            {driver.retired ? "RET" : driver.position}
-                                                        </span>
-                                                    </td>
-                                                    {/* Team color bar */}
-                                                    <td className="py-2.5 px-0 w-1">
-                                                        <div className="w-1 h-5 rounded-full" style={{ backgroundColor: driver.teamColor }} />
-                                                    </td>
-                                                    {/* Driver name */}
-                                                    <td className="py-2.5 px-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-bold" style={{ color: "var(--text-primary)" }}>{driver.abbreviation}</span>
-                                                            <span className="text-[10px] uppercase" style={{ color: "var(--text-tertiary)" }}>{driver.team}</span>
-                                                        </div>
-                                                    </td>
-                                                    {/* Gap */}
-                                                    <td className="py-2.5 px-3 tabular-nums text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                                                        {driver.gap}
-                                                    </td>
-                                                    {/* Interval */}
-                                                    <td className="py-2.5 px-3 tabular-nums text-xs" style={{ color: "var(--text-secondary)" }}>
-                                                        {driver.interval}
-                                                    </td>
-                                                    {/* Best Lap */}
-                                                    <td className="py-2.5 px-3 tabular-nums text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                                                        {driver.bestLapTime || "—"}
-                                                    </td>
-                                                    {/* Pits */}
-                                                    <td className="py-2.5 px-3 text-center text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-                                                        {driver.pitCount}
-                                                    </td>
-                                                    {/* Status */}
-                                                    <td className="py-2.5 px-3 text-xs">
-                                                        {driver.retired ? (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase" style={{ backgroundColor: "rgba(239, 68, 68, 0.2)", color: "#ef4444" }}>RET</span>
-                                                        ) : driver.position <= 3 ? (
-                                                            <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase" style={{ backgroundColor: "rgba(34, 197, 94, 0.2)", color: "#22c55e" }}>{t('podium')}</span>
-                                                        ) : (
-                                                            <span style={{ color: "var(--text-tertiary)" }}>{t('finished')}</span>
-                                                        )}
+                                        <tbody className="text-sm divide-y divide-white/5">
+                                            {tableData.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={4} className="py-12 text-center text-slate-500 font-mono text-sm tracking-widest uppercase">
+                                                        {t('waitingTiming')}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                            ) : (
+                                                tableData.map((driver) => (
+                                                    <tr key={driver.driverNumber} className="group hover:bg-[#1a1b1e] transition-colors">
+                                                        <td className="py-2.5 text-center font-bold text-white relative">
+                                                            <div className="absolute left-0 top-0 bottom-0 w-1 rounded-r" style={{ backgroundColor: driver.teamColor }} />
+                                                            <span>{driver.position}</span>
+                                                        </td>
+                                                        <td className="py-2.5 font-bold text-white px-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-sm w-6 text-center font-mono text-slate-500">{driver.driverNumber}</span>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-slate-100 text-sm leading-tight">{driver.abbreviation}</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2.5 text-slate-300 font-mono text-xs text-right pr-4">
+                                                            {driver.gap}
+                                                        </td>
+                                                        <td className="py-2.5 text-slate-500 font-mono text-xs text-right pr-4">
+                                                            {driver.interval}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
+
+                            {/* Track Map */}
+                            <div className="flex-1 bg-[#111111] border border-white/5 rounded-xl shadow-2xl overflow-hidden min-h-[400px] xl:max-h-[850px] relative">
+                                <LiveTrackMap sessionKey={session.session_key} drivers={driversMap} locations={locationsMap} />
+                            </div>
+
                         </div>
 
-                        {/* Right panel */}
-                        <div className="space-y-6">
-                            {/* Race Progress */}
-                            <div className="card p-5">
-                                <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-                                    {t('raceSummary')}
-                                </h3>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs" style={{ color: "var(--text-secondary)" }}>
-                                        <span>{t('completed')}</span>
-                                        <span>{state.totalLaps} {t('laps')}</span>
+                        {/* Bottom Row: Info Panels */}
+                        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+
+                            {/* Race Control */}
+                            <div className="bg-[#111111] border border-white/5 rounded-xl shadow-2xl overflow-hidden flex flex-col h-[400px]">
+                                <div className="p-4 border-b border-white/5 flex items-center justify-between bg-[#111111]">
+                                    <div className="flex items-center gap-2">
+                                        <Flag size={15} className="text-[#e81932]" />
+                                        <h3 className="text-xs font-bold text-white uppercase tracking-widest">
+                                            {t('raceControl')}
+                                        </h3>
                                     </div>
-                                    <div className="w-full h-2 rounded-full overflow-hidden" style={{ backgroundColor: "var(--bg-tertiary)" }}>
-                                        <div className="h-full rounded-full" style={{ width: "100%", background: "var(--gradient-primary)" }} />
-                                    </div>
-                                    <div className="flex justify-between text-xs mt-2" style={{ color: "var(--text-tertiary)" }}>
-                                        <span>{t('finishers')}: {state.drivers.filter(d => !d.retired).length}</span>
-                                        <span>{t('dnf')}: {state.drivers.filter(d => d.retired).length}</span>
-                                    </div>
+                                    <span className="bg-white/5 text-xs px-2 py-0.5 rounded font-mono text-slate-400">{messages.length} MSGS</span>
+                                </div>
+                                <div className="overflow-y-auto flex-grow p-4 space-y-4 no-scrollbar">
+                                    {messages.length === 0 ? (
+                                        <p className="text-center text-slate-600 text-sm italic mt-10">{t('noMessages')}</p>
+                                    ) : (
+                                        messages.map((msg, idx) => {
+                                            const time = new Date(msg.date).toLocaleTimeString();
+                                            let flagColor = "text-slate-500";
+                                            if (msg.flag === "GREEN" || msg.flag === "CLEAR" || msg.message.includes("CLEAR")) flagColor = "text-green-500";
+                                            if (msg.flag === "YELLOW" || msg.message.includes("YELLOW")) flagColor = "text-yellow-400";
+                                            if (msg.flag === "RED" || msg.message.includes("RED FLAG")) flagColor = "text-red-500";
+
+                                            return (
+                                                <div key={idx} className="flex gap-3 bg-[#1a1b1e] p-3 rounded-lg border border-white/5">
+                                                    <span className="text-[10px] font-mono text-slate-500 shrink-0 mt-0.5">{time}</span>
+                                                    <div className="flex flex-col gap-1 w-full">
+                                                        <div className="flex items-center justify-between w-full">
+                                                            <div className="flex items-center gap-1.5">
+                                                                {msg.flag === "YELLOW" && <AlertTriangle size={12} className={flagColor} />}
+                                                                {(msg.flag === "GREEN" || msg.flag === "CLEAR") && <Flag size={12} className={flagColor} />}
+                                                                <span className={`text-[10px] font-bold uppercase tracking-widest ${flagColor}`}>{msg.category}</span>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                                                            {msg.message}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
                                 </div>
                             </div>
 
-                            {/* Race Control Feed */}
-                            <div className="card p-0 overflow-hidden">
-                                <div className="px-5 py-4 flex items-center gap-2" style={{ borderBottom: "1px solid var(--border-primary)" }}>
-                                    <Flag size={16} style={{ color: "var(--f1-red)" }} />
-                                    <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                                        {t('raceHighlights')}
+                            {/* Team Radios */}
+                            <div className="bg-[#111111] border border-white/5 rounded-xl shadow-2xl overflow-hidden flex flex-col h-[400px]">
+                                <div className="p-4 border-b border-white/5 flex items-center justify-between bg-[#111111]">
+                                    <h3 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                                        <Volume2 size={15} className="text-blue-400" />
+                                        Team Radios
                                     </h3>
+                                    <span className="bg-white/5 text-xs px-2 py-0.5 rounded font-mono text-slate-400">{teamRadios.length} MSGS</span>
                                 </div>
-                                <div className="max-h-80 overflow-y-auto">
-                                    {state.raceControlMessages.map((msg, idx) => (
-                                        <div
-                                            key={idx}
-                                            className="px-5 py-3"
-                                            style={{ borderBottom: idx < state.raceControlMessages.length - 1 ? "1px solid var(--border-primary)" : "none" }}
-                                        >
-                                            <div className="flex items-start gap-2">
-                                                {msg.flag === "GREEN" && <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: "var(--accent-green)" }} />}
-                                                {msg.flag === "YELLOW" && <AlertTriangle size={12} className="mt-1 shrink-0" style={{ color: "var(--accent-yellow)" }} />}
-                                                {msg.flag === "CHECKERED" && <Flag size={12} className="mt-1 shrink-0" style={{ color: "var(--f1-red)" }} />}
-                                                {!msg.flag && <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: "var(--text-tertiary)" }} />}
-                                                <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
-                                                    {msg.message}
-                                                </p>
-                                            </div>
+                                <div className="overflow-y-auto flex-grow p-4 space-y-4 no-scrollbar">
+                                    {teamRadios.length === 0 ? (
+                                        <div className="flex h-full items-center justify-center">
+                                            <p className="text-center text-slate-600 text-sm italic">Waiting for radio messages...</p>
                                         </div>
-                                    ))}
+                                    ) : (
+                                        teamRadios.map((radio, idx) => {
+                                            const driver = driversMap.get(parseInt(radio.RacingNumber));
+                                            return (
+                                                <div key={`radio-${idx}`} className="flex flex-col gap-2 bg-[#1a1b1e] p-3 rounded-lg border border-white/5 relative overflow-hidden">
+                                                    <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: driver?.team_colour ? `#${driver.team_colour}` : '#999' }}></div>
+                                                    <div className="flex items-center gap-2 pl-2">
+                                                        <span className="font-mono font-bold text-white text-sm">{radio.RacingNumber}</span>
+                                                        <span className="text-slate-300 font-medium text-sm">{driver?.name_acronym || 'UNK'}</span>
+                                                        <span className="ml-auto text-[10px] text-slate-500 font-mono">
+                                                            {new Date(radio.Utc).toLocaleTimeString()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="pl-2 mt-1 flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0">
+                                                            <Volume2 size={14} className="text-blue-400" />
+                                                        </div>
+                                                        <p className="text-xs text-slate-400 italic flex-grow">"Audio clip received"</p>
+                                                        {/* Feature integration: radio.Path would point to the audio stream */}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
                                 </div>
                             </div>
+
+                            {/* Track Violations */}
+                            <div className="bg-[#111111] border border-white/5 rounded-xl shadow-2xl overflow-hidden flex flex-col h-[400px]">
+                                <div className="p-4 border-b border-white/5 flex items-center justify-between bg-[#111111]">
+                                    <h3 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                                        <AlertOctagon size={15} className="text-orange-500" />
+                                        Track Violations
+                                    </h3>
+                                    <span className="bg-white/5 text-xs px-2 py-0.5 rounded font-mono text-slate-400">
+                                        {messages.filter(m => m.message.includes("TRACK LIMITS") || m.message.includes("DELETED")).length} LAPS
+                                    </span>
+                                </div>
+                                <div className="overflow-y-auto flex-grow p-4 space-y-3 no-scrollbar">
+                                    {messages.filter(m => m.message.includes("TRACK LIMITS") || m.message.includes("DELETED")).length === 0 ? (
+                                        <div className="flex h-full items-center justify-center">
+                                            <p className="text-center text-slate-600 text-sm italic">No track limits reported</p>
+                                        </div>
+                                    ) : (
+                                        Object.entries(
+                                            messages
+                                                .filter(m => m.message.includes("TRACK LIMITS") || m.message.includes("DELETED"))
+                                                .reduce((acc, curr) => {
+                                                    // Try to match "CAR XX" in message
+                                                    const match = curr.message.match(/CAR (\d+)/);
+                                                    if (match && match[1]) {
+                                                        const num = parseInt(match[1]);
+                                                        acc[num] = (acc[num] || 0) + 1;
+                                                    }
+                                                    return acc;
+                                                }, {} as Record<number, number>)
+                                        )
+                                            .sort(([, a], [, b]) => b - a)
+                                            .map(([driverNumStr, count]) => {
+                                                const driverNum = parseInt(driverNumStr);
+                                                const driver = driversMap.get(driverNum);
+                                                return (
+                                                    <div key={driverNum} className="flex justify-between items-center bg-[#1a1b1e] p-3 rounded-lg border border-white/5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-1 h-8 rounded-full" style={{ backgroundColor: driver?.team_colour ? `#${driver.team_colour}` : '#999' }}></div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono font-bold text-white w-6">{driverNum}</span>
+                                                                <span className="text-slate-300 font-medium">{driver?.name_acronym || 'UNK'}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-1.5">
+                                                            {[1, 2, 3, 4].map(idx => (
+                                                                <div
+                                                                    key={idx}
+                                                                    className={`w-3 h-3 rounded-sm ${idx <= count
+                                                                        ? idx === 4 ? 'bg-red-500' : 'bg-orange-500'
+                                                                        : 'bg-white/10'
+                                                                        }`}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                    )}
+                                </div>
+                            </div>
+
                         </div>
-                    </div>
-                ) : (
-                    <div className="text-center py-20">
-                        <p style={{ color: "var(--text-secondary)" }}>{t('selectRacePrompt')}</p>
                     </div>
                 )}
             </main>
             <Footer />
-        </>
+        </div>
     );
 }

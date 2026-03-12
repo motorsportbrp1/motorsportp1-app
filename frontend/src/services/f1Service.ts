@@ -6,6 +6,10 @@ export interface Season {
     url: string;
 }
 
+interface SeasonsResponse {
+    seasons: Season[];
+}
+
 export interface Driver {
     driverId: string;
     url: string;
@@ -25,7 +29,8 @@ export const f1Service = {
     // --- Championships & Schedule ---
 
     async getSeasons(): Promise<Season[]> {
-        return api.get('/seasons');
+        const response = await api.get('/seasons') as SeasonsResponse;
+        return response.seasons ?? [];
     },
 
     async getSchedule(year: number | 'current') {
@@ -46,6 +51,10 @@ export const f1Service = {
     async getConstructors(year?: number) {
         const url = year ? `/constructors?year=${year}` : '/constructors';
         return api.get(url);
+    },
+
+    async getSeasonRaces(year: number) {
+        return api.get(`/seasons/${year}/races`);
     },
 
     // --- Job Polling ---
@@ -80,6 +89,17 @@ export const f1Service = {
         return this.pollJob(job.job_id);
     },
 
+    async getSessionStints(year: number, round: number, sessionName: string) {
+        const job: any = await api.post(`/sessions/${year}/${round}/${sessionName}/stints/job`);
+        return this.pollJob(job.job_id);
+    },
+
+    async getFastF1Summary(year: number, round: number, sessionName: string) {
+        // This endpoint might be synchronous depending on backend implementation, but usually these are slow.
+        // If it's pure sync, we return it directly. Let's assume it returns directly in API based on sessions.py
+        return api.get(`/sessions/${year}/${round}/${sessionName}/fastf1-summary`);
+    },
+
     async getTelemetry(year: number, round: number, sessionName: string, driverId: string) {
         // Start the background job
         const job: any = await api.post(`/telemetry/${year}/${round}/${sessionName}/${driverId}/job`);
@@ -92,3 +112,4 @@ export const f1Service = {
         return this.pollJob(job.job_id);
     }
 };
+

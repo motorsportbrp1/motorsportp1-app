@@ -3,6 +3,7 @@
 import { Link, usePathname } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import LanguageSwitcher from "./LanguageSwitcher";
+import Clock from "../common/Clock";
 
 export default function Header() {
     const t = useTranslations('Navigation');
@@ -57,6 +58,7 @@ export default function Header() {
                 {/* Actions */}
                 <div className="flex items-center gap-6 flex-1 justify-end">
                     <div className="flex items-center gap-4">
+                        <Clock />
                         <LanguageSwitcher />
                         <button className="hover:text-white transition-colors" style={{ color: "#94a3b8" }}>
                             <span className="material-symbols-outlined">dashboard_customize</span>
