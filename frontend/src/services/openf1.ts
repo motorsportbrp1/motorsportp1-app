@@ -166,6 +166,9 @@ export interface OpenF1WeekendSession {
     date_start: string;
     date_end: string;
     year: number;
+    country_name?: string;
+    location?: string;
+    circuit_short_name?: string;
 }
 
 export interface OpenF1SessionResult {

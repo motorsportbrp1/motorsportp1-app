@@ -48,6 +48,25 @@ type Translate = (key: string) => string;
 type ScheduleEntry = { key: string; date: string; label: string; time: string; highlight: boolean };
 type ScheduleDay = { key: string; title: string; dateLabel: string; isRaceDay: boolean; sessions: ScheduleEntry[] };
 
+function normalizePodiumRace(race: {
+    year: number;
+    round: number;
+    officialname?: string;
+    grands_prix?: { name?: string; fullname?: string } | Array<{ name?: string; fullname?: string }>;
+}): PodiumRace {
+    const grandPrix = Array.isArray(race.grands_prix) ? race.grands_prix[0] : race.grands_prix;
+
+    return {
+        year: race.year,
+        round: race.round,
+        officialname: race.officialname,
+        grands_prix: grandPrix ? {
+            name: grandPrix.name,
+            fullname: grandPrix.fullname,
+        } : undefined,
+    };
+}
+
 export default function HomePage() {
     const t = useTranslations('HomePage');
     const currentSeasonYear = new Date().getUTCFullYear();
@@ -144,7 +163,7 @@ export default function HomePage() {
                 if (podResult && podResult.podium.length > 0) {
                     const podiumOrdered = [1, 0, 2].map(i => podResult.podium[i]).filter(Boolean);
                     setPodiumData({
-                        race: podResult.race,
+                        race: normalizePodiumRace(podResult.race),
                         podium: podiumOrdered.map(p => ({
                             id: p.driverId,
                             name: `${p.firstName} ${p.lastName}`,
